@@ -10,36 +10,8 @@ import {
   MinLength,
 } from 'class-validator';
 
-export class RegisterDto {
-  @ApiProperty({ example: 'Naveen' })
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(120)
-  name: string;
-
-  @ApiProperty({ example: 'owner@business.com' })
-  @IsEmail()
-  email: string;
-
-  @ApiProperty({ example: '+919876543210' })
-  @IsString()
-  @IsNotEmpty()
-  @Matches(/^\+?[0-9][0-9\s\-()]{6,18}$/, {
-    message: 'Enter a valid phone number',
-  })
-  phone: string;
-
-  @ApiProperty({ minLength: 8, example: 'a-strong-password' })
-  @IsString()
-  @MinLength(8)
-  @MaxLength(128)
-  password: string;
-
-  @ApiPropertyOptional({ enum: ['BUSINESS', 'AUDITOR'], default: 'BUSINESS' })
-  @IsOptional()
-  @IsIn(['BUSINESS', 'AUDITOR'])
-  accountType?: 'BUSINESS' | 'AUDITOR';
-}
+/** Fiscal-year label as shown on the login screen, e.g. "2026-27". */
+const FISCAL_YEAR_PATTERN = /^\d{4}-\d{2}$/;
 
 export class LoginDto {
   @ApiProperty({
@@ -55,7 +27,19 @@ export class LoginDto {
   @IsString()
   @IsNotEmpty()
   password: string;
+
+  /**
+   * The financial year to work in. Omitted = the current year. The books are
+   * one continuous ledger; this only decides which year's documents you see
+   * and which year new documents are numbered in.
+   */
+  @ApiPropertyOptional({ example: '2026-27', description: 'Financial year to open' })
+  @IsOptional()
+  @IsString()
+  @Matches(FISCAL_YEAR_PATTERN, { message: 'Financial year must look like 2026-27' })
+  fiscalYear?: string;
 }
+
 
 export class RefreshDto {
   @ApiPropertyOptional({ description: 'Falls back to the sa_refresh cookie' })

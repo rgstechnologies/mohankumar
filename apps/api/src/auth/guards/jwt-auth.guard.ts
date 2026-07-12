@@ -13,6 +13,8 @@ import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 interface AccessTokenPayload {
   sub: string;
   email: string;
+  /** Financial year the session was opened in, e.g. "2026-27". */
+  fy?: string;
 }
 
 /** Global guard: every route requires a Bearer token unless marked @Public(). */
@@ -45,6 +47,7 @@ export class JwtAuthGuard implements CanActivate {
       (request as Request & { user: unknown }).user = {
         id: payload.sub,
         email: payload.email,
+        fiscalYear: payload.fy,
       };
       return true;
     } catch {

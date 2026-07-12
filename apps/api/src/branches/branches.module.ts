@@ -28,7 +28,6 @@ import {
 } from 'class-validator';
 import { CompanyRoles } from '../companies/decorators/company-roles.decorator';
 import { CompanyRoleGuard } from '../companies/guards/company-role.guard';
-import { LicensingService } from '../licensing/licensing.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 class CreateBranchDto {
@@ -74,7 +73,6 @@ const ADMINS = [Role.OWNER, Role.ADMIN] as const;
 class BranchesController {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly licensing: LicensingService,
   ) {}
 
   @Get()
@@ -93,7 +91,6 @@ class BranchesController {
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Body() dto: CreateBranchDto,
   ) {
-    await this.licensing.assertCanAddBranch(companyId);
     const existing = await this.prisma.branch.findUnique({
       where: { companyId_name: { companyId, name: dto.name.trim() } },
     });

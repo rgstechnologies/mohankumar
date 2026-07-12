@@ -324,9 +324,13 @@ export class EstimatesService {
     return this.getOne(companyId, estimateId, branchScope);
   }
 
-  async list(companyId: string, branchScope?: string) {
+  async list(companyId: string, branchScope?: string, fiscalYear?: string) {
     const rows = await this.prisma.estimate.findMany({
-      where: { companyId, ...(branchScope && { branchId: branchScope }) },
+      where: {
+        companyId,
+        ...(branchScope && { branchId: branchScope }),
+        ...(fiscalYear && { fiscalYear }),
+      },
       include: this.fullInclude,
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       take: 200,
@@ -418,16 +422,6 @@ export class EstimatesService {
       await tx.estimateLine.deleteMany({ where: { estimateId } });
       await tx.estimate.delete({ where: { id: estimateId } });
       if (estimate.voucherId) {
-        const vLines = await tx.voucherLine.findMany({
-          where: { voucherId: estimate.voucherId },
-          select: { id: true },
-        });
-        if (vLines.length) {
-          await tx.bankStatementLine.updateMany({
-            where: { matchedVoucherLineId: { in: vLines.map((l) => l.id) } },
-            data: { matchedVoucherLineId: null },
-          });
-        }
         await tx.voucherLine.deleteMany({ where: { voucherId: estimate.voucherId } });
         await tx.voucher.deleteMany({ where: { id: estimate.voucherId, companyId } });
       }

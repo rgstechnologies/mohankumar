@@ -2,7 +2,7 @@
   "name": "bookly",
   "version": "0.1.0",
   "private": true,
-  "description": "Bookly — AI-powered business ERP for Indian SMEs",
+  "description": "Bookly \u2014 AI-powered business ERP for Indian SMEs",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -22,7 +22,9 @@
     "db:deploy": "dotenv -e .env -- prisma migrate deploy --schema apps/api/prisma/schema.prisma",
     "db:studio": "dotenv -e .env -- prisma studio --schema apps/api/prisma/schema.prisma",
     "lint": "npm run lint --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present"
+    "test": "npm run test --workspaces --if-present",
+    "db:seed": "npm run db:seed -w apps/api",
+    "db:reset": "dotenv -e .env -- prisma migrate reset --schema apps/api/prisma/schema.prisma"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

@@ -474,15 +474,13 @@ export class ReportsService {
       select: {
         fyStartMonth: true,
         salesPaymentLink: true,
-        purchasePaymentLink: true,
       },
     });
 
-    // The Overview reflects the selected Payment Link: when sales/purchase
-    // payments reconcile against estimates, every figure is derived from
-    // estimates rather than invoices/bills (and vice-versa).
+    // The Overview reflects the selected Payment Link: when sales payments
+    // reconcile against estimates, the sales figures are derived from estimates
+    // rather than invoices. Purchases always come from purchase bills.
     const salesViaEstimate = company.salesPaymentLink === 'estimate';
-    const purchaseViaEstimate = company.purchasePaymentLink === 'purchaseEstimate';
     const estActive = { notIn: [EstimateStatus.CANCELLED, EstimateStatus.DECLINED] };
 
     const aggSales = (gte: Date) =>
@@ -502,17 +500,11 @@ export class ReportsService {
       await Promise.all([
         aggSales(monthStart),
         aggSales(fyStartDate),
-        purchaseViaEstimate
-          ? this.prisma.purchaseEstimate.aggregate({
-              where: { companyId, status: estActive, date: { gte: monthStart } },
-              _sum: { total: true },
-              _count: true,
-            })
-          : this.prisma.purchaseBill.aggregate({
-              where: { companyId, status: InvoiceStatus.ISSUED, date: { gte: monthStart } },
-              _sum: { total: true },
-              _count: true,
-            }),
+        this.prisma.purchaseBill.aggregate({
+          where: { companyId, status: InvoiceStatus.ISSUED, date: { gte: monthStart } },
+          _sum: { total: true },
+          _count: true,
+        }),
         this.ledgerNets(companyId, { includeOpening: true }),
         this.prisma.item.findMany({
           where: { companyId, isActive: true, reorderLevel: { not: null } },

@@ -2,16 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { EstimateStatus, InvoiceStatus, PartyType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-/** The four document types a party's outstanding can be tracked against. */
-export type BalanceDocType =
-  | 'invoice'
-  | 'estimate'
-  | 'purchase'
-  | 'purchaseEstimate';
+/** The document types a party's outstanding can be tracked against. */
+export type BalanceDocType = 'invoice' | 'estimate' | 'purchase';
 
 export interface CompanyDefaults {
   salesPaymentLink: string; // 'invoice' | 'estimate'
-  purchasePaymentLink: string; // 'purchase' | 'purchaseEstimate'
 }
 
 export interface PartyLite {
@@ -66,17 +61,15 @@ export class PartyBalanceService {
     if (
       party.balanceDocType === 'invoice' ||
       party.balanceDocType === 'estimate' ||
-      party.balanceDocType === 'purchase' ||
-      party.balanceDocType === 'purchaseEstimate'
+      party.balanceDocType === 'purchase'
     ) {
       return party.balanceDocType;
     }
     if (party.type === PartyType.CUSTOMER) {
       return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
     }
-    return company.purchasePaymentLink === 'purchaseEstimate'
-      ? 'purchaseEstimate'
-      : 'purchase';
+    // Vendors are always tracked against purchase bills.
+    return 'purchase';
   }
 
   /**
@@ -93,7 +86,6 @@ export class PartyBalanceService {
       invoice: [],
       estimate: [],
       purchase: [],
-      purchaseEstimate: [],
     };
     for (const p of parties) {
       const dt = this.resolveDocType(p, company);
@@ -109,7 +101,6 @@ export class PartyBalanceService {
       this.sumInvoices(companyId, buckets.invoice, add),
       this.sumEstimates(companyId, buckets.estimate, add),
       this.sumPurchaseBills(companyId, buckets.purchase, add),
-      this.sumPurchaseEstimates(companyId, buckets.purchaseEstimate, add),
     ]);
 
     const result = new Map<string, PartyOutstanding>();
@@ -212,34 +203,11 @@ export class PartyBalanceService {
         })
         .filter(keep);
     }
-    if (docType === 'purchase') {
-      const rows = await this.prisma.purchaseBill.findMany({
-        where: { companyId, partyId, status: InvoiceStatus.ISSUED },
-        select: {
-          id: true, billNo: true, fiscalYear: true, date: true, total: true,
-          payments: { select: { amount: true } },
-        },
-        orderBy: { date: 'asc' },
-      });
-      return rows
-        .map((r) => {
-          const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
-          return {
-            id: r.id,
-            no: `BILL/${r.fiscalYear}/${String(r.billNo).padStart(4, '0')}`,
-            date: r.date,
-            total: Number(r.total),
-            paid: r2(paid),
-            outstanding: r2(Number(r.total) - paid),
-          };
-        })
-        .filter(keep);
-    }
-    // purchaseEstimate
-    const rows = await this.prisma.purchaseEstimate.findMany({
-      where: { companyId, partyId, status: EST_ACTIVE },
+    // purchase
+    const rows = await this.prisma.purchaseBill.findMany({
+      where: { companyId, partyId, status: InvoiceStatus.ISSUED },
       select: {
-        id: true, estimateNo: true, fiscalYear: true, date: true, total: true,
+        id: true, billNo: true, fiscalYear: true, date: true, total: true,
         payments: { select: { amount: true } },
       },
       orderBy: { date: 'asc' },
@@ -249,7 +217,7 @@ export class PartyBalanceService {
         const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
         return {
           id: r.id,
-          no: `PEST/${r.fiscalYear}/${String(r.estimateNo).padStart(4, '0')}`,
+          no: `BILL/${r.fiscalYear}/${String(r.billNo).padStart(4, '0')}`,
           date: r.date,
           total: Number(r.total),
           paid: r2(paid),
@@ -315,19 +283,4 @@ export class PartyBalanceService {
     }
   }
 
-  private async sumPurchaseEstimates(
-    companyId: string,
-    partyIds: string[],
-    add: (partyId: string, amount: number) => void,
-  ) {
-    if (!partyIds.length) return;
-    const rows = await this.prisma.purchaseEstimate.findMany({
-      where: { companyId, partyId: { in: partyIds }, status: EST_ACTIVE },
-      select: { partyId: true, total: true, payments: { select: { amount: true } } },
-    });
-    for (const r of rows) {
-      const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
-      add(r.partyId, Number(r.total) - paid);
-    }
-  }
 }

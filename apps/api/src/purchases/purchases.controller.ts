@@ -19,13 +19,12 @@ import {
   CurrentUser,
   type AuthUser,
 } from '../auth/decorators/current-user.decorator';
+import { FiscalYear } from '../auth/decorators/fiscal-year.decorator';
 import { BranchScope } from '../companies/decorators/branch-scope.decorator';
 import { CompanyRoles } from '../companies/decorators/company-roles.decorator';
 import { CompanyRoleGuard } from '../companies/guards/company-role.guard';
 import { RecordPaymentDto } from '../invoices/dto/invoice.dto';
 import { InvoicePdfService } from '../invoices/invoice-pdf.service';
-import { DesignPdfService } from '../print-designer/design-pdf.service';
-import { PrintTemplatesService } from '../print-designer/print-templates.service';
 import { CreatePurchaseBillDto } from './dto/purchase.dto';
 import { PurchasesService } from './purchases.service';
 
@@ -45,8 +44,6 @@ export class PurchasesController {
   constructor(
     private readonly purchases: PurchasesService,
     private readonly pdf: InvoicePdfService,
-    private readonly designPdf: DesignPdfService,
-    private readonly printTemplates: PrintTemplatesService,
   ) {}
 
   @Get('purchase-bills/:billId/pdf')
@@ -62,10 +59,7 @@ export class PurchasesController {
     const bill = await this.purchases.getForPdf(companyId, billId, branchScope);
     const locale =
       lang ?? (req.cookies as Record<string, string> | undefined)?.['sa.locale'];
-    const design = await this.printTemplates.getDefaultDesign(companyId, 'purchaseBill');
-    const buffer = design
-      ? await this.designPdf.render(bill, design, locale, 'purchaseBill')
-      : await this.pdf.render(bill, locale, { docKind: 'purchaseBill' });
+    const buffer = await this.pdf.render(bill, locale, { docKind: 'purchaseBill' });
     const fileName = `BILL-${bill.fiscalYear}-${String(bill.invoiceNo).padStart(4, '0')}.pdf`;
     res
       .status(200)
@@ -94,8 +88,9 @@ export class PurchasesController {
   list(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @BranchScope() branchScope?: string,
+    @FiscalYear() fiscalYear?: string,
   ) {
-    return this.purchases.list(companyId, branchScope);
+    return this.purchases.list(companyId, branchScope, fiscalYear);
   }
 
   @Patch('purchase-bills/:billId')

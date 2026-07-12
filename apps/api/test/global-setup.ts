@@ -8,7 +8,7 @@ import { join } from 'path';
 export default function globalSetup(): void {
   const url =
     process.env.TEST_DATABASE_URL ??
-    'postgresql://accountant:change-me-in-production@localhost:5433/smart_accountant_test?schema=public';
+    'postgresql://accountant:change-me-in-production@localhost:5433/erp_mohankumar_test?schema=public';
 
   // --accept-data-loss is safe here: this database is throwaway test state,
   // recreated/truncated on every run.

@@ -440,20 +440,3 @@ export class UpdateCompanyDto extends CompanyContactBankFields {
   @IsIn(['purchase', 'purchaseEstimate'])
   purchasePaymentLink?: 'purchase' | 'purchaseEstimate';
 }
-
-export class CreateInviteDto {
-  @ApiProperty({ example: 'accountant@business.com' })
-  @IsEmail()
-  email: string;
-
-  @ApiProperty({ enum: Role, example: Role.ACCOUNTANT })
-  @IsEnum(Role)
-  role: Role;
-
-  @ApiPropertyOptional({
-    description: 'Home branch — scopes a BRANCH_MANAGER to that branch',
-  })
-  @IsOptional()
-  @IsUUID()
-  branchId?: string;
-}

@@ -833,7 +833,7 @@ export class InvoicePdfService {
     const received = isInvoice
       ? (invoice.payments ?? []).reduce((s, p) => s + Number(p.amount), 0)
       : 0;
-    const loyaltyDisc = isInvoice ? Number(invoice.loyaltyDiscount) : 0;
+    const loyaltyDisc = 0;
     const afterTotals: [string, string][] = isInvoice
       ? [
           ...(loyaltyDisc > 0

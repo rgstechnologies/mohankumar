@@ -52,7 +52,7 @@ export class PartiesService {
   private companyDefaults(companyId: string) {
     return this.prisma.company.findUniqueOrThrow({
       where: { id: companyId },
-      select: { salesPaymentLink: true, purchasePaymentLink: true },
+      select: { salesPaymentLink: true },
     });
   }
 
@@ -203,7 +203,6 @@ export class PartiesService {
         balanceDocType: party.balanceDocType,
         balance: Math.abs(net),
         balanceType: net >= 0 ? EntryType.DEBIT : EntryType.CREDIT,
-        loyaltyPoints: party.loyaltyPoints,
       };
     });
   }
@@ -324,36 +323,6 @@ export class PartiesService {
       }
       advanceRef = `EST/${est.fiscalYear}/${String(est.estimateNo).padStart(4, '0')}`;
     }
-    if (dto.purchaseOrderId) {
-      if (isCustomer) {
-        throw new BadRequestException(
-          'A purchase-order advance can only be recorded against a vendor',
-        );
-      }
-      const po = await this.prisma.purchaseOrder.findFirst({
-        where: { id: dto.purchaseOrderId, companyId, partyId },
-        select: { fiscalYear: true, poNo: true },
-      });
-      if (!po) {
-        throw new BadRequestException('Purchase order not found for this vendor');
-      }
-      advanceRef = `PO/${po.fiscalYear}/${String(po.poNo).padStart(4, '0')}`;
-    }
-    if (dto.purchaseEstimateId) {
-      if (isCustomer) {
-        throw new BadRequestException(
-          'A purchase-estimate advance can only be recorded against a vendor',
-        );
-      }
-      const pe = await this.prisma.purchaseEstimate.findFirst({
-        where: { id: dto.purchaseEstimateId, companyId, partyId },
-        select: { fiscalYear: true, estimateNo: true },
-      });
-      if (!pe) {
-        throw new BadRequestException('Purchase estimate not found for this vendor');
-      }
-      advanceRef = `PEST/${pe.fiscalYear}/${String(pe.estimateNo).padStart(4, '0')}`;
-    }
 
     const base = isCustomer
       ? `Receipt from ${party.name}`
@@ -401,8 +370,6 @@ export class PartiesService {
           reference: dto.reference,
           note: dto.note,
           estimateId: dto.estimateId,
-          purchaseOrderId: dto.purchaseOrderId,
-          purchaseEstimateId: dto.purchaseEstimateId,
         },
       });
     });
@@ -417,8 +384,6 @@ export class PartiesService {
       orderBy: { date: 'desc' },
       include: {
         estimate: { select: { fiscalYear: true, estimateNo: true } },
-        purchaseOrder: { select: { fiscalYear: true, poNo: true } },
-        purchaseEstimate: { select: { fiscalYear: true, estimateNo: true } },
       },
     });
     return rows.map((p) => ({
@@ -430,14 +395,9 @@ export class PartiesService {
       reference: p.reference,
       note: p.note,
       estimateId: p.estimateId,
-      purchaseEstimateId: p.purchaseEstimateId,
       advanceRef: p.estimate
         ? `EST/${p.estimate.fiscalYear}/${String(p.estimate.estimateNo).padStart(4, '0')}`
-        : p.purchaseOrder
-          ? `PO/${p.purchaseOrder.fiscalYear}/${String(p.purchaseOrder.poNo).padStart(4, '0')}`
-          : p.purchaseEstimate
-            ? `PEST/${p.purchaseEstimate.fiscalYear}/${String(p.purchaseEstimate.estimateNo).padStart(4, '0')}`
-            : null,
+        : null,
     }));
   }
 

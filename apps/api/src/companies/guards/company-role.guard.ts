@@ -8,7 +8,6 @@ import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
 import type { Request } from 'express';
 import type { AuthUser } from '../../auth/decorators/current-user.decorator';
-import { LicensingService } from '../../licensing/licensing.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { COMPANY_ROLES_KEY } from '../decorators/company-roles.decorator';
 
@@ -22,7 +21,6 @@ export class CompanyRoleGuard implements CanActivate {
   constructor(
     private readonly prisma: PrismaService,
     private readonly reflector: Reflector,
-    private readonly licensing: LicensingService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -69,12 +67,6 @@ export class CompanyRoleGuard implements CanActivate {
       throw new ForbiddenException(
         `Requires one of roles: ${allowedRoles.join(', ')}`,
       );
-    }
-
-    // Licence gate: once the owner's trial/plan lapses the company is read-only
-    // (GET still works) — any write is blocked until they renew.
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
-      await this.licensing.assertCompanyActive(companyId);
     }
 
     request.membershipRole = membership.role;

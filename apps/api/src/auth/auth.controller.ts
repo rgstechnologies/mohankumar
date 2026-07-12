@@ -21,7 +21,6 @@ import {
   MfaCodeDto,
   MfaVerifyDto,
   RefreshDto,
-  RegisterDto,
   ResetPasswordDto,
 } from './dto/auth.dto';
 
@@ -66,32 +65,26 @@ export class AuthController {
     res.clearCookie(REFRESH_COOKIE, { path: '/api/v1/auth' });
   }
 
+  // No public /register route: this is a single-business install and accounts
+  // are provisioned by the operator, so self-signup would only be a way in.
+
   @Public()
-  @Throttle({ default: { limit: 10, ttl: 60_000 } })
-  @Post('register')
-  @ApiOperation({ summary: 'Create an account' })
-  async register(
-    @Body() dto: RegisterDto,
-    @Res({ passthrough: true }) res: Response,
-  ) {
-    const result = await this.auth.register(
-      dto.name,
-      dto.email,
-      dto.phone,
-      dto.password,
-      dto.accountType,
-    );
-    this.setAuthCookies(res, result);
-    return result;
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Get('fiscal-years')
+  @ApiOperation({
+    summary: 'Financial years this business has books for (login year picker)',
+  })
+  fiscalYears() {
+    return this.auth.fiscalYears();
   }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Log in with email or phone + password' })
+  @ApiOperation({ summary: 'Log in with email or phone + password + financial year' })
   async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.auth.login(dto.identifier, dto.password);
+    const result = await this.auth.login(dto.identifier, dto.password, dto.fiscalYear);
     if ('mfaRequired' in result) return result; // cookies only after the code
     this.setAuthCookies(res, result);
     return result;

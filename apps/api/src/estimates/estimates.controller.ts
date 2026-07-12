@@ -20,12 +20,11 @@ import {
   CurrentUser,
   type AuthUser,
 } from '../auth/decorators/current-user.decorator';
+import { FiscalYear } from '../auth/decorators/fiscal-year.decorator';
 import { BranchScope } from '../companies/decorators/branch-scope.decorator';
 import { CompanyRoles } from '../companies/decorators/company-roles.decorator';
 import { CompanyRoleGuard } from '../companies/guards/company-role.guard';
 import { InvoicePdfService } from '../invoices/invoice-pdf.service';
-import { DesignPdfService } from '../print-designer/design-pdf.service';
-import { PrintTemplatesService } from '../print-designer/print-templates.service';
 import { CreateEstimateDto, SetEstimateStatusDto } from './dto/estimate.dto';
 import { EstimatesService } from './estimates.service';
 
@@ -45,8 +44,6 @@ export class EstimatesController {
   constructor(
     private readonly estimates: EstimatesService,
     private readonly pdf: InvoicePdfService,
-    private readonly designPdf: DesignPdfService,
-    private readonly printTemplates: PrintTemplatesService,
   ) {}
 
   @Post()
@@ -66,8 +63,9 @@ export class EstimatesController {
   list(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @BranchScope() branchScope?: string,
+    @FiscalYear() fiscalYear?: string,
   ) {
-    return this.estimates.list(companyId, branchScope);
+    return this.estimates.list(companyId, branchScope, fiscalYear);
   }
 
   @Patch(':estimateId')
@@ -105,10 +103,7 @@ export class EstimatesController {
     const estimate = await this.estimates.getForPdf(companyId, estimateId, branchScope);
     const locale =
       lang ?? (req.cookies as Record<string, string> | undefined)?.['sa.locale'];
-    const design = await this.printTemplates.getDefaultDesign(companyId, 'estimate');
-    const buffer = design
-      ? await this.designPdf.render(estimate, design, locale, 'estimate')
-      : await this.pdf.render(estimate, locale, { docKind: 'estimate' });
+    const buffer = await this.pdf.render(estimate, locale, { docKind: 'estimate' });
     const fileName = `EST-${estimate.fiscalYear}-${String(estimate.invoiceNo).padStart(4, '0')}.pdf`;
     res
       .status(200)

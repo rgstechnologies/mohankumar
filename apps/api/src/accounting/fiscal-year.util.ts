@@ -10,6 +10,33 @@ export function fiscalYearOf(date: Date, fyStartMonth: number): string {
   return `${startYear}-${endYearShort}`;
 }
 
+/**
+ * The fiscal years this business has books for: from the year it started using
+ * the system (`firstDate`, i.e. the company's creation date) through to the
+ * year `now` falls in. Oldest first.
+ *
+ * This is what makes the year roll forward on its own — nothing is "opened" or
+ * "closed". The day the calendar crosses into the next fiscal year, that year
+ * simply appears in the list and can be selected at login. The books are one
+ * continuous ledger underneath, so stock and customer dues carry across the
+ * boundary without an opening-balance step.
+ */
+export function fiscalYearsSince(
+  firstDate: Date,
+  now: Date,
+  fyStartMonth: number,
+): string[] {
+  const first = fiscalYearOf(firstDate, fyStartMonth);
+  const current = fiscalYearOf(now, fyStartMonth);
+  const startYear = Number(first.slice(0, 4));
+  const endYear = Number(current.slice(0, 4));
+  const years: string[] = [];
+  for (let y = startYear; y <= endYear; y++) {
+    years.push(`${y}-${String((y + 1) % 100).padStart(2, '0')}`);
+  }
+  return years;
+}
+
 /** Short prefixes used in display voucher numbers, e.g. PMT/2026-27/0003. */
 export const VOUCHER_PREFIX: Record<string, string> = {
   JOURNAL: 'JNL',

@@ -21,6 +21,7 @@ import {
   CurrentUser,
   type AuthUser,
 } from '../auth/decorators/current-user.decorator';
+import { FiscalYear } from '../auth/decorators/fiscal-year.decorator';
 import { BranchScope } from '../companies/decorators/branch-scope.decorator';
 import { CompanyRoles } from '../companies/decorators/company-roles.decorator';
 import { CompanyRoleGuard } from '../companies/guards/company-role.guard';
@@ -31,9 +32,7 @@ import {
 } from './dto/invoice.dto';
 import { InvoicePdfService } from './invoice-pdf.service';
 import { InvoicesService } from './invoices.service';
-import { PosReceiptService } from '../pos/pos-receipt.service';
-import { DesignPdfService } from '../print-designer/design-pdf.service';
-import { PrintTemplatesService } from '../print-designer/print-templates.service';
+import { PosReceiptService } from './pos-receipt.service';
 
 const BILLING_ROLES = [
   Role.OWNER,
@@ -53,8 +52,6 @@ export class InvoicesController {
     private readonly invoices: InvoicesService,
     private readonly pdf: InvoicePdfService,
     private readonly receipt: PosReceiptService,
-    private readonly printTemplates: PrintTemplatesService,
-    private readonly designPdf: DesignPdfService,
   ) {}
 
   @Post()
@@ -65,17 +62,19 @@ export class InvoicesController {
     @CurrentUser() user: AuthUser,
     @Body() dto: CreateInvoiceDto,
     @BranchScope() branchScope?: string,
+    @FiscalYear() fiscalYear?: string,
   ) {
-    return this.invoices.create(companyId, user.id, dto, branchScope);
+    return this.invoices.create(companyId, user.id, dto, branchScope, fiscalYear);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List invoices with payment status' })
+  @ApiOperation({ summary: 'List invoices in the open financial year' })
   list(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @BranchScope() branchScope?: string,
+    @FiscalYear() fiscalYear?: string,
   ) {
-    return this.invoices.list(companyId, branchScope);
+    return this.invoices.list(companyId, branchScope, fiscalYear);
   }
 
   @Patch(':invoiceId')
@@ -114,11 +113,7 @@ export class InvoicesController {
     // Falls back to the UI language cookie so downloads match the screen.
     const locale =
       lang ?? (req.cookies as Record<string, string> | undefined)?.['sa.locale'];
-    // Prefer the company's default drag-and-drop design; else the built-in layout.
-    const design = await this.printTemplates.getDefaultDesign(companyId, 'invoice');
-    const buffer = design
-      ? await this.designPdf.render(invoice, design, locale)
-      : await this.pdf.render(invoice, locale);
+    const buffer = await this.pdf.render(invoice, locale);
     const fileName = `INV-${invoice.fiscalYear}-${String(invoice.invoiceNo).padStart(4, '0')}.pdf`;
     res
       .status(200)
@@ -159,40 +154,6 @@ export class InvoicesController {
         'Content-Length': buffer.length,
       })
       .end(buffer);
-  }
-
-  @Post(':invoiceId/share')
-  @CompanyRoles(...BILLING_ROLES)
-  @ApiOperation({
-    summary: 'Create a public share link for the invoice (WhatsApp etc.)',
-  })
-  async share(
-    @Param('companyId', ParseUUIDPipe) companyId: string,
-    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
-    @BranchScope() branchScope?: string,
-  ) {
-    const shared = await this.invoices.share(companyId, invoiceId, branchScope);
-    const base =
-      this.config.get<string>('API_PUBLIC_URL') ??
-      `${this.config.getOrThrow<string>('WEB_ORIGIN')}/api/v1`;
-    return {
-      url: `${base}/public/invoices/${shared.shareToken}/pdf`,
-      invoiceNo: shared.invoiceNo,
-      total: shared.total,
-      date: shared.date,
-      party: shared.party,
-    };
-  }
-
-  @Post(':invoiceId/share/revoke')
-  @CompanyRoles(...BILLING_ROLES)
-  @ApiOperation({ summary: 'Invalidate the public share link' })
-  @HttpCode(204)
-  async revokeShare(
-    @Param('companyId', ParseUUIDPipe) companyId: string,
-    @Param('invoiceId', ParseUUIDPipe) invoiceId: string,
-  ): Promise<void> {
-    await this.invoices.revokeShare(companyId, invoiceId);
   }
 
   @Post(':invoiceId/cancel')

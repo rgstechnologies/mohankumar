@@ -15,7 +15,7 @@ import {
 import type { User } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes } from 'crypto';
-import { LicensingService } from '../licensing/licensing.service';
+import { fiscalYearOf, fiscalYearsSince } from '../accounting/fiscal-year.util';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -34,6 +34,8 @@ export interface MfaChallenge {
 
 export interface AuthResult extends TokenPair {
   user: { id: string; email: string; name: string };
+  /** The financial year this session is working in, e.g. "2026-27". */
+  fiscalYear: string;
 }
 
 @Injectable()
@@ -43,53 +45,18 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly config: ConfigService,
     private readonly mail: MailService,
-      private readonly licensing: LicensingService,
   ) {}
 
-  async register(
-    name: string,
-    email: string,
-    phone: string,
-    password: string,
-    accountType: 'BUSINESS' | 'AUDITOR' = 'BUSINESS',
-  ): Promise<AuthResult> {
-    const normalizedEmail = email.trim().toLowerCase();
-    const normalizedPhone = this.normalizePhone(phone);
-    if (!normalizedPhone) {
-      throw new BadRequestException('Enter a valid phone number');
-    }
-    if (await this.prisma.user.findUnique({ where: { email: normalizedEmail } })) {
-      throw new ConflictException('An account with this email already exists');
-    }
-    if (await this.prisma.user.findUnique({ where: { phone: normalizedPhone } })) {
-      throw new ConflictException('An account with this phone number already exists');
-    }
-
-    const user = await this.prisma.user.create({
-      data: {
-        name: name.trim(),
-        email: normalizedEmail,
-        phone: normalizedPhone,
-        passwordHash: await this.hashPassword(password),
-        accountType,
-      },
-    });
-    // Business accounts start on the free company trial; auditor accounts don't
-    // run companies, so they don't need a company subscription.
-    if (accountType !== 'AUDITOR') {
-      await this.licensing.startTrial(user.id);
-    }
-    // Payroll employees registered with their work email get portal access.
-    await this.prisma.employee.updateMany({
-      where: { email: normalizedEmail, userId: null },
-      data: { userId: user.id },
-    });
-    return this.buildAuthResult(user);
-  }
+  /**
+   * There is deliberately no public self-registration in this build. It is a
+   * single-business install: accounts are provisioned by the operator (see the
+   * seed script), so an open sign-up route would only be a way in for strangers.
+   */
 
   async login(
     identifier: string,
     password: string,
+    fiscalYear?: string,
   ): Promise<AuthResult | MfaChallenge> {
     // The identifier is an email or a phone number — match either.
     const trimmed = identifier.trim();
@@ -111,10 +78,15 @@ export class AuthService {
     if (user.isBlocked) {
       throw new UnauthorizedException('This account is blocked — contact support');
     }
+    // Validate the requested year here, at the password step, so the choice is
+    // already trusted by the time tokens are issued.
+    const fy = await this.resolveFiscalYear(fiscalYear);
+
     if (user.totpEnabled) {
-      // Password verified, but tokens only come after the TOTP step.
+      // Password verified, but tokens only come after the TOTP step. The chosen
+      // year rides on the mfaToken rather than being re-sent by the client.
       const mfaToken = await this.jwt.signAsync(
-        { sub: user.id, purpose: 'mfa' },
+        { sub: user.id, purpose: 'mfa', fy },
         {
           secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
           expiresIn: 300,
@@ -126,7 +98,41 @@ export class AuthService {
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
-    return this.buildAuthResult(user);
+    return this.buildAuthResult(user, fy);
+  }
+
+  /**
+   * The financial years this business has books for — oldest first, with the
+   * current one last. Used by the login screen's year picker.
+   *
+   * Single-business install: there is exactly one company, so this needs no
+   * authentication. It exposes nothing but year labels.
+   */
+  async fiscalYears(): Promise<{ fiscalYears: string[]; current: string }> {
+    const company = await this.prisma.company.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+      select: { createdAt: true, fyStartMonth: true },
+    });
+    const now = new Date();
+    if (!company) {
+      const only = fiscalYearOf(now, 4);
+      return { fiscalYears: [only], current: only };
+    }
+    const years = fiscalYearsSince(company.createdAt, now, company.fyStartMonth);
+    return { fiscalYears: years, current: years[years.length - 1] };
+  }
+
+  /** Defaults to the current year; rejects a year the business has no books for. */
+  private async resolveFiscalYear(requested?: string): Promise<string> {
+    const { fiscalYears, current } = await this.fiscalYears();
+    if (!requested) return current;
+    if (!fiscalYears.includes(requested)) {
+      throw new BadRequestException(
+        `${requested} is not one of this business's financial years`,
+      );
+    }
+    return requested;
   }
 
   // -------------------------------------------------------------
@@ -194,7 +200,7 @@ export class AuthService {
 
   /** Step 2 of login: exchange password-proof + TOTP/recovery code for tokens. */
   async mfaVerify(mfaToken: string, code: string): Promise<AuthResult> {
-    let payload: { sub: string; purpose?: string };
+    let payload: { sub: string; purpose?: string; fy?: string };
     try {
       payload = await this.jwt.verifyAsync(mfaToken, {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
@@ -225,7 +231,7 @@ export class AuthService {
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
-    return this.buildAuthResult(user);
+    return this.buildAuthResult(user, await this.resolveFiscalYear(payload.fy));
   }
 
   /** Returns the remaining hashes when the code matched, else null. */
@@ -259,7 +265,11 @@ export class AuthService {
       where: { id: stored.id },
       data: { revokedAt: new Date() },
     });
-    return this.buildAuthResult(stored.user);
+    // Rotating the session must not silently move the user to another year.
+    return this.buildAuthResult(
+      stored.user,
+      await this.resolveFiscalYear(stored.fiscalYear ?? undefined),
+    );
   }
 
   async logout(refreshToken: string): Promise<void> {
@@ -277,7 +287,6 @@ export class AuthService {
         email: true,
         phone: true,
         name: true,
-        accountType: true,
         isSuperAdmin: true,
         totpEnabled: true,
         memberships: {
@@ -288,8 +297,7 @@ export class AuthService {
         },
       },
     });
-    const subscription = await this.licensing.summary(userId);
-    return { ...user, subscription };
+    return user;
   }
 
   async hashPassword(password: string): Promise<string> {
@@ -358,9 +366,9 @@ export class AuthService {
     ]);
   }
 
-  private async buildAuthResult(user: User): Promise<AuthResult> {
+  private async buildAuthResult(user: User, fiscalYear: string): Promise<AuthResult> {
     const accessToken = await this.jwt.signAsync(
-      { sub: user.id, email: user.email },
+      { sub: user.id, email: user.email, fy: fiscalYear },
       {
         secret: this.config.getOrThrow<string>('JWT_ACCESS_SECRET'),
         expiresIn: this.config.getOrThrow<number>('JWT_ACCESS_TTL'),
@@ -373,6 +381,7 @@ export class AuthService {
       data: {
         userId: user.id,
         tokenHash: this.hashToken(refreshToken),
+        fiscalYear,
         expiresAt: new Date(Date.now() + refreshTtlSeconds * 1000),
       },
     });
@@ -380,6 +389,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
+      fiscalYear,
       user: { id: user.id, email: user.email, name: user.name },
     };
   }

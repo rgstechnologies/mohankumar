@@ -19,7 +19,6 @@ import type { RecordPaymentDto } from '../invoices/dto/invoice.dto';
 import type { FullInvoice } from '../invoices/invoice-pdf.service';
 import { calculateInvoice, type CalcLineInput } from '../invoices/gst-calculator';
 import { BatchesService } from '../inventory/batches.service';
-import { JobWorksService } from '../inventory/job-works.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreatePurchaseBillDto } from './dto/purchase.dto';
 
@@ -29,7 +28,6 @@ export class PurchasesService {
     private readonly prisma: PrismaService,
     private readonly accounting: AccountingService,
     private readonly batches: BatchesService,
-    private readonly jobWorks: JobWorksService,
   ) {}
 
   async create(
@@ -477,9 +475,13 @@ export class PurchasesService {
     return this.getOne(companyId, billId, branchScope);
   }
 
-  async list(companyId: string, branchScope?: string) {
+  async list(companyId: string, branchScope?: string, fiscalYear?: string) {
     const bills = await this.prisma.purchaseBill.findMany({
-      where: { companyId, ...(branchScope && { branchId: branchScope }), },
+      where: {
+        companyId,
+        ...(branchScope && { branchId: branchScope }),
+        ...(fiscalYear && { fiscalYear }),
+      },
       include: this.fullInclude,
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       take: 200,
@@ -576,28 +578,12 @@ export class PurchasesService {
     ].filter((v): v is string => !!v);
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.purchaseEstimate.updateMany({
-        where: { purchaseBillId: billId, companyId },
-        data: { purchaseBillId: null, status: EstimateStatus.ACCEPTED },
-      });
       await tx.billPayment.deleteMany({ where: { billId } });
       if (noteIds.length) await tx.noteLine.deleteMany({ where: { noteId: { in: noteIds } } });
       await tx.note.deleteMany({ where: { purchaseBillId: billId } });
       await tx.purchaseBillLine.deleteMany({ where: { billId } });
       await tx.purchaseBill.delete({ where: { id: billId } });
       if (voucherIds.length) {
-        // Unmatch reconciled bank-statement lines before deleting these voucher
-        // lines (live-DB FK doesn't cascade — would fail or strand the match).
-        const vLines = await tx.voucherLine.findMany({
-          where: { voucherId: { in: voucherIds } },
-          select: { id: true },
-        });
-        if (vLines.length) {
-          await tx.bankStatementLine.updateMany({
-            where: { matchedVoucherLineId: { in: vLines.map((l) => l.id) } },
-            data: { matchedVoucherLineId: null },
-          });
-        }
         await tx.voucherLine.deleteMany({ where: { voucherId: { in: voucherIds } } });
         await tx.voucher.deleteMany({ where: { id: { in: voucherIds }, companyId } });
       }
@@ -708,7 +694,6 @@ export class PurchasesService {
    * to the item's purchase price.
    */
   async stockReport(companyId: string) {
-    const jobWork = await this.jobWorks.stockEffect(companyId);
     const [items, purchased, sold, noteMoves] = await Promise.all([
       this.prisma.item.findMany({
         where: { companyId, isActive: true },
@@ -809,14 +794,9 @@ export class PurchasesService {
       // Sales returns come back into stock; purchase returns leave it.
       const returnsIn = creditInMap.get(item.id) ?? 0;
       const returnsOut = debitOutMap.get(item.id) ?? 0;
-      // Job work: issued raw leaves the premises; received finished re-enters.
-      const jwIssued = jobWork.issuedByItem.get(item.id) ?? 0;
-      const jwReceived = jobWork.receivedByItem.get(item.id) ?? 0;
-      const withJobWorker = jobWork.withWorkerByItem.get(item.id) ?? 0;
       const onHand =
         Math.round(
-          (opening + purchasedQty - soldQty + returnsIn - returnsOut - jwIssued + jwReceived) *
-            1000,
+          (opening + purchasedQty - soldQty + returnsIn - returnsOut) * 1000,
         ) / 1000;
 
       const avgPurchaseRate =
@@ -841,7 +821,6 @@ export class PurchasesService {
         purchasedQty,
         soldQty,
         onHand,
-        withJobWorker,
         avgRate: Math.round(avgPurchaseRate * 100) / 100,
         stockValue,
         reorderLevel,

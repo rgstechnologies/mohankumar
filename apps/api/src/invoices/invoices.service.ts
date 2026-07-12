@@ -1,4 +1,3 @@
-import { randomBytes } from 'crypto';
 import {
   BadRequestException,
   Injectable,
@@ -30,11 +29,25 @@ export class InvoicesService {
     private readonly batches: BatchesService,
   ) {}
 
+  /**
+   * A document must belong to the year the session is open in. Without this a
+   * user working in 2026-27 could silently post into 2027-28 by typing a date,
+   * and it would then vanish from their own list.
+   */
+  private assertActiveYear(docYear: string, activeYear?: string): void {
+    if (activeYear && docYear !== activeYear) {
+      throw new BadRequestException(
+        `That date falls in ${docYear}, but you are working in ${activeYear}. Log in to ${docYear} to post it.`,
+      );
+    }
+  }
+
   async create(
     companyId: string,
     userId: string,
     dto: CreateInvoiceDto,
     branchScope?: string,
+    activeFiscalYear?: string,
   ) {
     // Branch managers always bill from their own branch.
     if (branchScope) dto.branchId = branchScope;
@@ -44,9 +57,6 @@ export class InvoicesService {
         select: {
           stateCode: true,
           fyStartMonth: true,
-          loyaltyEnabled: true,
-          loyaltyEarnPercent: true,
-          loyaltyRedeemValue: true,
         },
       }),
       this.prisma.party.findFirst({
@@ -146,39 +156,15 @@ export class InvoicesService {
       extraCharges,
     );
 
-    // Loyalty redemption: apply requested points as a post-tax discount,
-    // capped by the customer's balance and by the invoice total.
-    const redeemRequested = dto.redeemPoints ?? 0;
-    const redeemValue = Number(company.loyaltyRedeemValue);
-    let redeemPoints = 0;
-    let redeemAmount = 0;
-    if (
-      redeemRequested > 0 &&
-      company.loyaltyEnabled &&
-      redeemValue > 0 &&
-      party.name !== 'Walk-in Customer'
-    ) {
-      if (redeemRequested > party.loyaltyPoints) {
-        throw new BadRequestException(
-          `Not enough loyalty points — balance is ${party.loyaltyPoints}`,
-        );
-      }
-      const maxByTotal = Math.floor(Number(calc.total) / redeemValue);
-      redeemPoints = Math.min(redeemRequested, maxByTotal);
-      redeemAmount = Math.round(redeemPoints * redeemValue * 100) / 100;
-    }
-
     // Build the accounting entries.
     const ledgers = await this.systemLedgers(companyId);
-    const loyaltyLedgerId =
-      redeemAmount > 0 ? await this.loyaltyDiscountLedger(companyId) : null;
     const freightLedgerId =
       extraCharges > 0 ? await this.freightChargesLedger(companyId, false) : null;
     const voucherLines = this.buildSalesVoucherLines(
       ledgers,
       calc,
       party.ledgerId,
-      loyaltyLedgerId ? { amount: redeemAmount, ledgerId: loyaltyLedgerId } : undefined,
+      undefined,
       freightLedgerId ? { amount: extraCharges, ledgerId: freightLedgerId } : undefined,
     );
 
@@ -191,27 +177,9 @@ export class InvoicesService {
     await this.accounting.validateVoucherInput(companyId, voucherDto);
 
     const fiscalYear = fiscalYearOf(new Date(dto.date), company.fyStartMonth);
+    this.assertActiveYear(fiscalYear, activeFiscalYear);
 
     const invoice = await this.prisma.$transaction(async (tx) => {
-      // When loyalty is in play, lock the party row up-front and re-read the
-      // balance so concurrent invoices for the same customer can't lost-update
-      // the points or over-redeem (re-validate the redemption against fresh).
-      const doLoyalty = company.loyaltyEnabled && party.name !== 'Walk-in Customer';
-      let loyaltyBalance = party.loyaltyPoints;
-      if (doLoyalty) {
-        await tx.$queryRaw`SELECT id FROM parties WHERE id = ${party.id} FOR UPDATE`;
-        const fresh = await tx.party.findUniqueOrThrow({
-          where: { id: party.id },
-          select: { loyaltyPoints: true },
-        });
-        loyaltyBalance = fresh.loyaltyPoints;
-        if (redeemPoints > loyaltyBalance) {
-          throw new BadRequestException(
-            `Not enough loyalty points — balance is ${loyaltyBalance}`,
-          );
-        }
-      }
-
       const voucher = await this.accounting.postVoucherTx(
         tx,
         companyId,
@@ -249,8 +217,6 @@ export class InvoicesService {
           freightCharges: dto.freightCharges ?? 0,
           otherCharges: dto.otherCharges ?? 0,
           total: calc.total,
-          loyaltyDiscount: redeemAmount,
-          loyaltyPointsRedeemed: redeemPoints,
           createdById: userId,
           lines: {
             create: resolved.map((r, index) => ({
@@ -274,51 +240,6 @@ export class InvoicesService {
         },
         include: this.fullInclude,
       });
-
-      // Loyalty (skip the POS walk-in): redeem the applied points first, then
-      // award earn points on the gross sale. Both adjust the same balance.
-      if (doLoyalty) {
-        const ref = `INV/${created.fiscalYear}/${String(created.invoiceNo).padStart(4, '0')}`;
-        let runningBal = loyaltyBalance;
-        if (redeemPoints > 0) {
-          runningBal -= redeemPoints;
-          await tx.party.update({
-            where: { id: party.id },
-            data: { loyaltyPoints: runningBal },
-          });
-          await tx.loyaltyTxn.create({
-            data: {
-              companyId,
-              partyId: party.id,
-              type: 'REDEEM',
-              points: -redeemPoints,
-              balanceAfter: runningBal,
-              reference: ref,
-              createdById: userId,
-            },
-          });
-        }
-        const pct = Number(company.loyaltyEarnPercent);
-        const earned = pct > 0 ? Math.round((Number(calc.total) * pct) / 100) : 0;
-        if (earned > 0) {
-          runningBal += earned;
-          await tx.party.update({
-            where: { id: party.id },
-            data: { loyaltyPoints: runningBal },
-          });
-          await tx.loyaltyTxn.create({
-            data: {
-              companyId,
-              partyId: party.id,
-              type: 'EARN',
-              points: earned,
-              balanceAfter: runningBal,
-              reference: ref,
-              createdById: userId,
-            },
-          });
-        }
-      }
 
       return created;
     });
@@ -420,7 +341,6 @@ export class InvoicesService {
       include: {
         payments: { select: { id: true } },
         creditNotes: { where: { status: 'ISSUED' }, select: { id: true } },
-        eInvoice: { select: { status: true } },
         lines: { select: { item: { select: { trackBatches: true } } } },
       },
     });
@@ -438,19 +358,9 @@ export class InvoicesService {
         'This invoice has credit notes — cancel those, or cancel & reissue',
       );
     }
-    if (invoice.eInvoice && invoice.eInvoice.status === 'GENERATED') {
-      throw new BadRequestException(
-        'Cancel the e-invoice (IRN) first, then edit — or cancel & reissue',
-      );
-    }
     if (invoice.lines.some((l) => l.item?.trackBatches)) {
       throw new BadRequestException(
         'This invoice has batch-tracked items — cancel & reissue to change it',
-      );
-    }
-    if (Number(invoice.loyaltyDiscount) > 0) {
-      throw new BadRequestException(
-        'This invoice has redeemed loyalty points — cancel & reissue to change it',
       );
     }
 
@@ -615,9 +525,13 @@ export class InvoicesService {
     return this.getOne(companyId, invoiceId, branchScope);
   }
 
-  async list(companyId: string, branchScope?: string) {
+  async list(companyId: string, branchScope?: string, fiscalYear?: string) {
     const invoices = await this.prisma.invoice.findMany({
-      where: { companyId, ...(branchScope && { branchId: branchScope }), },
+      where: {
+        companyId,
+        ...(branchScope && { branchId: branchScope }),
+        ...(fiscalYear && { fiscalYear }),
+      },
       include: this.fullInclude,
       orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
       take: 200,
@@ -634,65 +548,11 @@ export class InvoicesService {
     return this.serialize(invoice);
   }
 
-  /** Raw record with company + party details — used by the PDF renderer. */
-  /** Creates (or reuses) the unguessable public-share token. */
-  async share(companyId: string, invoiceId: string, branchScope?: string) {
-    const invoice = await this.prisma.invoice.findFirst({
-      where: {
-        id: invoiceId,
-        companyId,
-        ...(branchScope && { branchId: branchScope }),
-      },
-      include: { party: { select: { name: true, phone: true } } },
-    });
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    if (invoice.status === 'CANCELLED') {
-      throw new BadRequestException('Cancelled invoices cannot be shared');
-    }
-    const shareToken =
-      invoice.shareToken ?? randomBytes(24).toString('hex');
-    if (!invoice.shareToken) {
-      await this.prisma.invoice.update({
-        where: { id: invoice.id },
-        data: { shareToken },
-      });
-    }
-    return {
-      shareToken,
-      invoiceNo: `INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
-      total: Number(invoice.total),
-      date: invoice.date,
-      party: invoice.party,
-    };
-  }
-
-  async revokeShare(companyId: string, invoiceId: string) {
-    const invoice = await this.prisma.invoice.findFirst({
-      where: { id: invoiceId, companyId },
-    });
-    if (!invoice) throw new NotFoundException('Invoice not found');
-    await this.prisma.invoice.update({
-      where: { id: invoice.id },
-      data: { shareToken: null },
-    });
-  }
-
-  /** Public path — the token IS the authorization. */
-  async getByShareToken(token: string) {
-    const invoice = await this.prisma.invoice.findUnique({
-      where: { shareToken: token },
-      include: {
-        company: true,
-        party: true,
-        lines: { orderBy: { lineNo: 'asc' } },
-        payments: true,
-      },
-    });
-    if (!invoice || invoice.status === 'CANCELLED') {
-      throw new NotFoundException('This link is no longer valid');
-    }
-    return invoice;
-  }
+  /**
+   * Public invoice-share links are deliberately not part of this build: an
+   * unauthenticated, token-addressable PDF route is attack surface the client
+   * did not ask for. Invoices are downloaded as PDFs by signed-in users only.
+   */
 
   async getForPdf(companyId: string, invoiceId: string, branchScope?: string) {
     const invoice = await this.prisma.invoice.findFirst({
@@ -702,8 +562,6 @@ export class InvoicesService {
         party: true,
         lines: { orderBy: { lineNo: 'asc' } },
         payments: true,
-        eInvoice: true,
-        eWayBill: true,
         bankAccount: true,
       },
     });
@@ -809,10 +667,7 @@ export class InvoicesService {
       igstAmount: d(0),
       roundOff: d(0),
       total: d(taxable + cgst * 2),
-      loyaltyDiscount: d(0),
-      loyaltyPointsRedeemed: 0,
       status: InvoiceStatus.ISSUED,
-      shareToken: null,
       createdById: 'preview',
       createdAt: now,
       updatedAt: now,
@@ -903,30 +758,12 @@ export class InvoicesService {
     await this.prisma.$transaction(async (tx) => {
       // Revert any source documents this invoice was generated from.
       await tx.estimate.updateMany({ where: { invoiceId, companyId }, data: { invoiceId: null, status: EstimateStatus.ACCEPTED } });
-      await tx.proformaInvoice.updateMany({ where: { invoiceId, companyId }, data: { invoiceId: null, status: EstimateStatus.ACCEPTED } });
-      await tx.deliveryChallan.updateMany({ where: { invoiceId, companyId }, data: { invoiceId: null, status: EstimateStatus.ACCEPTED } });
-      await tx.salesOrder.updateMany({ where: { invoiceId, companyId }, data: { invoiceId: null, status: EstimateStatus.ACCEPTED } });
       await tx.payment.deleteMany({ where: { invoiceId } });
       if (noteIds.length) await tx.noteLine.deleteMany({ where: { noteId: { in: noteIds } } });
       await tx.note.deleteMany({ where: { invoiceId } });
-      await tx.eInvoice.deleteMany({ where: { invoiceId } });
-      await tx.eWayBill.deleteMany({ where: { invoiceId } });
       await tx.invoiceLine.deleteMany({ where: { invoiceId } });
       await tx.invoice.delete({ where: { id: invoiceId } });
       if (voucherIds.length) {
-        // Unmatch any bank-statement lines reconciled against these voucher
-        // lines first — the FK isn't ON DELETE in the live DB, so deleting the
-        // lines would either fail or strand the bank line as "reconciled".
-        const vLines = await tx.voucherLine.findMany({
-          where: { voucherId: { in: voucherIds } },
-          select: { id: true },
-        });
-        if (vLines.length) {
-          await tx.bankStatementLine.updateMany({
-            where: { matchedVoucherLineId: { in: vLines.map((l) => l.id) } },
-            data: { matchedVoucherLineId: null },
-          });
-        }
         await tx.voucherLine.deleteMany({ where: { voucherId: { in: voucherIds } } });
         await tx.voucher.deleteMany({ where: { id: { in: voucherIds }, companyId } });
       }
@@ -1037,8 +874,6 @@ export class InvoicesService {
       where: { status: 'ISSUED' as const },
       select: { total: true },
     },
-    eInvoice: { select: { status: true, irn: true } },
-    eWayBill: { select: { status: true, ewbNo: true } },
   };
 
   /** Find-or-create the "Loyalty Discount" expense ledger (for redemptions). */
@@ -1109,8 +944,6 @@ export class InvoicesService {
     freightCharges: Prisma.Decimal;
     otherCharges: Prisma.Decimal;
     total: Prisma.Decimal;
-    loyaltyDiscount: Prisma.Decimal;
-    loyaltyPointsRedeemed: number;
     party: { id: string; name: string; gstin: string | null };
     branch?: { id: string; name: string } | null;
     lines: {
@@ -1137,8 +970,6 @@ export class InvoicesService {
       reference: string | null;
     }[];
     creditNotes?: { total: Prisma.Decimal }[];
-    eInvoice?: { status: string; irn: string } | null;
-    eWayBill?: { status: string; ewbNo: string } | null;
   }) {
     const paidAmount =
       Math.round(
@@ -1149,9 +980,7 @@ export class InvoicesService {
         (invoice.creditNotes ?? []).reduce((sum, n) => sum + Number(n.total), 0) * 100,
       ) / 100;
     const total = Number(invoice.total);
-    const loyaltyDiscount = Number(invoice.loyaltyDiscount);
-    // Redemption settles part of the bill (seller-borne), like a payment.
-    const settled = paidAmount + notesTotal + loyaltyDiscount;
+    const settled = paidAmount + notesTotal;
     return {
       id: invoice.id,
       invoiceNo: `INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
@@ -1173,16 +1002,8 @@ export class InvoicesService {
       freightCharges: Number(invoice.freightCharges),
       otherCharges: Number(invoice.otherCharges),
       total,
-      loyaltyDiscount,
-      loyaltyPointsRedeemed: invoice.loyaltyPointsRedeemed,
       paidAmount,
       creditNotesTotal: notesTotal,
-      eInvoice: invoice.eInvoice
-        ? { status: invoice.eInvoice.status, irn: invoice.eInvoice.irn }
-        : null,
-      eWayBill: invoice.eWayBill
-        ? { status: invoice.eWayBill.status, ewbNo: invoice.eWayBill.ewbNo }
-        : null,
       outstanding: Math.max(
         0,
         Math.round((total - settled) * 100) / 100,

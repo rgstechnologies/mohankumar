@@ -10,10 +10,6 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CompanyRoleGuard } from '../companies/guards/company-role.guard';
 import { BatchesService } from './batches.service';
-import { JobWorksController } from './job-works.controller';
-import { JobWorksService } from './job-works.service';
-import { StockTransfersController } from './stock-transfers.controller';
-import { StockTransfersService } from './stock-transfers.service';
 
 @ApiTags('batches')
 @ApiBearerAuth()
@@ -34,8 +30,8 @@ class BatchesController {
 
 @Global()
 @Module({
-  controllers: [BatchesController, StockTransfersController, JobWorksController],
-  providers: [BatchesService, StockTransfersService, JobWorksService],
-  exports: [BatchesService, StockTransfersService, JobWorksService],
+  controllers: [BatchesController],
+  providers: [BatchesService],
+  exports: [BatchesService],
 })
 export class BatchesModule {}
