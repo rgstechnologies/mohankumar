@@ -1,19 +1,16 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma, Role } from '@prisma/client';
-import { createHash, randomBytes } from 'crypto';
-import { AccountingService } from '../accounting/accounting.service';
+import { createHash } from 'crypto';import { AccountingService } from '../accounting/accounting.service';
 import { MailService } from '../mail/mail.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { DOC_KINDS, type DocKind } from '../invoices/invoice-template';
 import type { CreateCompanyDto } from './dto/company.dto';
 
-const INVITE_TTL_DAYS = 7;
 
 @Injectable()
 export class CompaniesService {

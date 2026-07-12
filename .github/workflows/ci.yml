@@ -1,33 +1,67 @@
 name: CI
 
+# Every pull request and every push to main runs this. Branch protection makes
+# these checks required, so nothing reaches main without them passing.
 on:
   push:
     branches: [main]
   pull_request:
 
+concurrency:
+  # A new push to the same PR cancels the previous run — no queue backlog.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test-and-build:
+  # ---------------------------------------------------------------
+  # Fast feedback: lint + types. Fails in ~1 min, before the slow job.
+  # ---------------------------------------------------------------
+  static:
+    name: Lint & types
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - name: Generate Prisma client
+        run: npx prisma generate --schema apps/api/prisma/schema.prisma
+      - name: Build shared package
+        run: npm run build -w packages/shared
+
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck
+        run: npm run typecheck
+
+  # ---------------------------------------------------------------
+  # The real gate: the money maths, against a real Postgres.
+  # ---------------------------------------------------------------
+  test:
+    name: Tests & build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: accountant
+          POSTGRES_USER: erp
           POSTGRES_PASSWORD: ci-password
-          POSTGRES_DB: bookly_ci
-        ports:
-          - 5432:5432
+          POSTGRES_DB: erp_ci
+        ports: ['5432:5432']
         options: >-
-          --health-cmd "pg_isready -U accountant"
+          --health-cmd "pg_isready -U erp"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
       redis:
         image: redis:7-alpine
-        ports:
-          - 6379:6379
+        ports: ['6379:6379']
         options: >-
           --health-cmd "redis-cli ping"
           --health-interval 5s
@@ -35,33 +69,57 @@ jobs:
           --health-retries 10
 
     env:
-      TEST_DATABASE_URL: postgresql://accountant:ci-password@localhost:5432/bookly_ci?schema=public
-      DATABASE_URL: postgresql://accountant:ci-password@localhost:5432/bookly_ci?schema=public
+      TEST_DATABASE_URL: postgresql://erp:ci-password@localhost:5432/erp_ci?schema=public
+      DATABASE_URL: postgresql://erp:ci-password@localhost:5432/erp_ci?schema=public
       REDIS_URL: redis://localhost:6379
       NEXT_PUBLIC_API_URL: http://localhost:4000
 
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
-      - name: Install dependencies
-        run: npm ci
-
+      - run: npm ci
       - name: Generate Prisma client
         run: npx prisma generate --schema apps/api/prisma/schema.prisma
 
       - name: Build shared package
         run: npm run build -w packages/shared
-
       - name: Build API
         run: npm run build -w apps/api
-
       - name: Build web
         run: npm run build -w apps/web
 
-      - name: Run tests (unit + e2e)
+      - name: Tests (unit + e2e)
         run: npm test -w apps/api
+
+  # ---------------------------------------------------------------
+  # Security: no secrets in the diff, no known-vulnerable dependencies.
+  # ---------------------------------------------------------------
+  security:
+    name: Secrets & dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # gitleaks needs history to scan the whole diff
+
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+
+      - name: Audit dependencies
+        # Blocks on a high/critical advisory. Moderate ones are reported but
+        # don't fail the build — otherwise every PR gets held hostage by a
+        # transitive dev dependency nobody can fix that day.
+        run: npm audit --audit-level=high

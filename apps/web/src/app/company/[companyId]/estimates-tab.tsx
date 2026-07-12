@@ -10,8 +10,6 @@ import { useDeleteDocument } from '@/components/use-delete-document';
 import {
   inr,
   type EstimateView,
-  type ItemRow,
-  type PartyRow,
 } from '@/lib/accounting';
 import { api, ApiError, downloadFile, printFile } from '@/lib/api';
 
@@ -25,18 +23,12 @@ const STATUS_STYLE: Record<string, string> = {
 
 export function EstimatesTab({
   companyId,
-  parties,
-  items,
-  branches,
   estimates,
   canBill,
   canCancel,
   onChanged,
 }: {
   companyId: string;
-  parties: PartyRow[];
-  items: ItemRow[];
-  branches: { id: string; name: string; isActive: boolean }[];
   estimates: EstimateView[];
   canBill: boolean;
   canCancel: boolean;

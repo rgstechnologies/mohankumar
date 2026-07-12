@@ -372,7 +372,6 @@ export function DocEntryForm({
     );
   }
 
-  const extra = (Number(freight) || 0) + (Number(otherCharges) || 0);
 
   /** Per-line math (prices are entered tax-exclusive, like Vyapar default). */
   const lineCalc = useCallback(

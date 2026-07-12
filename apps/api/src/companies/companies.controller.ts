@@ -1,12 +1,10 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   Param,
   ParseUUIDPipe,
   Patch,
-  Post,
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -18,7 +16,6 @@ import {
 import { CompaniesService } from './companies.service';
 import { CompanyRoles } from './decorators/company-roles.decorator';
 import {
-  CreateCompanyDto,
   UpdateCompanyDto,
   InvoiceTemplateDto,
 } from './dto/company.dto';

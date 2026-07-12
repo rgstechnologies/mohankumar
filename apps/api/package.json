@@ -11,8 +11,9 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "dotenv -e ../../.env -- prisma studio",
     "test": "jest",
-    "lint": "eslint \"src/**/*.ts\"",
-    "db:seed": "dotenv -e ../../.env -- ts-node -P tsconfig.json prisma/seed.ts"
+    "lint": "eslint src",
+    "db:seed": "dotenv -e ../../.env -- ts-node -P tsconfig.json prisma/seed.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@bookly/shared": "*",

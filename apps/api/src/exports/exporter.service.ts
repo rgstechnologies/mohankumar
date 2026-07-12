@@ -1,8 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import PDFDocument from 'pdfkit';
-import type { ExportColumn, ExportSheet, TableDoc } from './table-doc';
-
+import type { ExportColumn, TableDoc } from './table-doc';
 const inr = (n: number) =>
   n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 

@@ -334,7 +334,6 @@ export class InvoicePdfService {
     const isPurchaseBill = docKind === 'purchaseBill';
     const isPurchaseOrder = docKind === 'purchaseOrder';
     const isPurchaseEst = docKind === 'purchaseEstimate';
-    const isPurchase = isPurchaseEst; // kept for existing call-sites below
     const isChallan = docKind === 'deliveryChallan';
     const isOrder = docKind === 'salesOrder';
     const isProforma = docKind === 'proformaInvoice';

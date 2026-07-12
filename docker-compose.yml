@@ -2,12 +2,12 @@
 # for fast feedback; only stateful services run in containers.
 # Usage: docker compose up -d
 
-name: bookly
+name: erp-mohankumar
 
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: sa-postgres
+    container_name: erp-postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-accountant}
@@ -25,7 +25,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: sa-redis
+    container_name: erp-redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     ports:
@@ -40,7 +40,7 @@ services:
 
   mailpit:
     image: axllent/mailpit:latest
-    container_name: sa-mailpit
+    container_name: erp-mailpit
     restart: unless-stopped
     ports:
       - "1025:1025" # SMTP

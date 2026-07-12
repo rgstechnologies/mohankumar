@@ -1,16 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useMemo, useState } from 'react';import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import { EmptyState, ExportButtons, Pagination, SearchInput, useTable } from '@/components/table';
 import { useFeedback } from '@/components/feedback';
 import { Button, Card, ErrorText, Input, Select } from '@/components/ui';
 import {
   inr,
-  type ItemRow,
   type LedgerRow,
-  type PartyRow,
   type PurchaseBillView,
 } from '@/lib/accounting';
 import { api, ApiError, downloadFile, printFile } from '@/lib/api';
@@ -27,20 +24,14 @@ const STATUS_STYLE: Record<string, string> = {
 
 export function PurchasesTab({
   companyId,
-  parties,
-  items,
   ledgers,
-  branches,
   bills,
   canBill,
   canCancel,
   onChanged,
 }: {
   companyId: string;
-  parties: PartyRow[];
-  items: ItemRow[];
   ledgers: LedgerRow[];
-  branches: { id: string; name: string; isActive: boolean }[];
   bills: PurchaseBillView[];
   canBill: boolean;
   canCancel: boolean;

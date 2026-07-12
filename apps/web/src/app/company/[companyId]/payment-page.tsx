@@ -203,7 +203,10 @@ export function PaymentPage({
         setLoadingParty(false);
       }
     },
-    [companyId, isIn, people],
+    // `useEstimate` decides which document this screen settles — leaving it out
+    // would let the callback close over a stale value and load invoices on the
+    // estimate screen (or vice-versa).
+    [companyId, isIn, useEstimate],
   );
 
   useEffect(() => {

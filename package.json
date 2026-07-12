@@ -21,12 +21,20 @@
     "db:migrate": "dotenv -e .env -- prisma migrate dev --schema apps/api/prisma/schema.prisma",
     "db:deploy": "dotenv -e .env -- prisma migrate deploy --schema apps/api/prisma/schema.prisma",
     "db:studio": "dotenv -e .env -- prisma studio --schema apps/api/prisma/schema.prisma",
-    "lint": "npm run lint --workspaces --if-present",
+    "lint": "eslint .",
     "test": "npm run test --workspaces --if-present",
     "db:seed": "npm run db:seed -w apps/api",
-    "db:reset": "dotenv -e .env -- prisma migrate reset --schema apps/api/prisma/schema.prisma"
+    "db:reset": "dotenv -e .env -- prisma migrate reset --schema apps/api/prisma/schema.prisma",
+    "typecheck": "npm run typecheck -w apps/api && npm run typecheck -w apps/web",
+    "verify": "npm run lint && npm run typecheck && npm run build && npm test -w apps/api"
   },
   "devDependencies": {
-    "concurrently": "^9.1.0"
+    "@eslint/js": "^9.39.5",
+    "@next/eslint-plugin-next": "^16.2.10",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.7.0",
+    "typescript-eslint": "^8.63.0"
   }
 }

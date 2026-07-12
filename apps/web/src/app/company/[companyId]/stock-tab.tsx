@@ -1,7 +1,6 @@
 'use client';
 
-import { Fragment, useState } from 'react';
-import { useTranslations } from 'next-intl';
+import { Fragment } from 'react';import { useTranslations } from 'next-intl';
 import { ExportButtons } from '@/components/table';
 import { Card } from '@/components/ui';
 import { inr, type ItemRow, type StockRow } from '@/lib/accounting';

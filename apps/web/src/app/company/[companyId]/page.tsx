@@ -13,7 +13,6 @@ import {
   fetchEstimates,
   fetchItems,
   fetchLedgers,
-  fetchBranches,
   fetchNotes,
   fetchParties,
   fetchPurchaseBills,
@@ -23,15 +22,8 @@ import {
   inr,
   VOUCHER_TYPES,
   type AccountGroup,
-  type BranchRow,
   type InvoiceView,
   type EstimateView,
-  type ProformaInvoiceView,
-  type DeliveryChallanView,
-  type SalesOrderView,
-  type ExpenseEntry,
-  type ChequeView,
-  type PurchaseEstimateView,
   type ItemRow,
   type LedgerRow,
   type NoteView,
@@ -289,7 +281,6 @@ export default function CompanyPage() {
   const [estimates, setEstimates] = useState<EstimateView[]>([]);
   const [bills, setBills] = useState<PurchaseBillView[]>([]);
   const [notes, setNotes] = useState<NoteView[]>([]);
-  const [branches, setBranches] = useState<BranchRow[]>([]);
   const [stock, setStock] = useState<StockRow[]>([]);
 
   // Open a specific tab when arriving with ?tab=… (e.g. returning from a
@@ -301,7 +292,7 @@ export default function CompanyPage() {
   }, []);
 
   const reload = useCallback(async () => {
-    const [g, l, v, p, i, inv, est, pb, st, nt, br] = await Promise.all([
+    const [g, l, v, p, i, inv, est, pb, st, nt] = await Promise.all([
       fetchGroups(companyId),
       fetchLedgers(companyId),
       fetchVouchers(companyId),
@@ -312,7 +303,6 @@ export default function CompanyPage() {
       fetchPurchaseBills(companyId),
       fetchStock(companyId),
       fetchNotes(companyId),
-      fetchBranches(companyId),
     ]);
     setGroups(g);
     setLedgers(l);
@@ -324,7 +314,6 @@ export default function CompanyPage() {
     setBills(pb);
     setStock(st);
     setNotes(nt);
-    setBranches(br);
   }, [companyId]);
 
   useEffect(() => {
@@ -513,9 +502,6 @@ export default function CompanyPage() {
           {tab === 'estimates' && (
             <EstimatesTab
               companyId={companyId}
-              parties={parties}
-              items={items}
-              branches={branches}
               estimates={estimates}
               canBill={canPostVouchers}
               canCancel={canManageLedgers}
@@ -525,10 +511,7 @@ export default function CompanyPage() {
           {tab === 'invoices' && (
             <InvoicesTab
               companyId={companyId}
-              parties={parties}
-              items={items}
               ledgers={ledgers}
-              branches={branches}
               invoices={invoices}
               canBill={canPostVouchers}
               canCancel={canManageLedgers}
@@ -566,10 +549,7 @@ export default function CompanyPage() {
           {tab === 'purchases' && (
             <PurchasesTab
               companyId={companyId}
-              parties={parties}
-              items={items}
               ledgers={ledgers}
-              branches={branches}
               bills={bills}
               canBill={canPostVouchers}
               canCancel={canManageLedgers}

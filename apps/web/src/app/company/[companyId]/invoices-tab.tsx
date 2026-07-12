@@ -9,9 +9,7 @@ import { Button, Card, ErrorText, Input, Select } from '@/components/ui';
 import {
   inr,
   type InvoiceView,
-  type ItemRow,
   type LedgerRow,
-  type PartyRow,
 } from '@/lib/accounting';
 import { api, ApiError, downloadFile, printFile } from '@/lib/api';
 import { RowActions } from '@/components/row-actions';
@@ -27,10 +25,7 @@ const STATUS_STYLE: Record<string, string> = {
 
 export function InvoicesTab({
   companyId,
-  parties,
-  items,
   ledgers,
-  branches,
   invoices,
   canBill,
   canCancel,
@@ -38,10 +33,7 @@ export function InvoicesTab({
   onChanged,
 }: {
   companyId: string;
-  parties: PartyRow[];
-  items: ItemRow[];
   ledgers: LedgerRow[];
-  branches: { id: string; name: string; isActive: boolean }[];
   invoices: InvoiceView[];
   canBill: boolean;
   canCancel: boolean;

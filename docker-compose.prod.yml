@@ -8,7 +8,7 @@
 # To use a managed database instead of the bundled one, set DATABASE_URL
 # in .env and remove the postgres service + depends_on entries.
 
-name: bookly-prod
+name: erp-mohankumar-prod
 
 services:
   postgres:

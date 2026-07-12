@@ -6,10 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useFeedback } from '@/components/feedback';
-import { EmptyState } from '@/components/table';
-import { Badge, Button, Card, ErrorText, HelpTip, Input, Label } from '@/components/ui';
-import { inr } from '@/lib/accounting';
-import { api, ApiError, openPdfPost, previewPdfBlob } from '@/lib/api';
+import { Button, Card, ErrorText, HelpTip, Input } from '@/components/ui';import { api, ApiError, openPdfPost, previewPdfBlob } from '@/lib/api';
 import { stateNameForCode } from '@bookly/shared';
 
 export interface BranchRow {
@@ -19,15 +16,6 @@ export interface BranchRow {
   isActive: boolean;
 }
 
-interface BranchPerf {
-  branchId: string | null;
-  name: string;
-  sales: number;
-  invoiceCount: number;
-  outstanding: number;
-  purchases: number;
-  billCount: number;
-}
 
 
 /** One-field payment settings: the UPI ID printed as a pay QR on invoices. */

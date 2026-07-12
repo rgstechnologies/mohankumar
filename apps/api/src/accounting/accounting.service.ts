@@ -4,7 +4,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
-  AccountNature,
   EntryType,
   Prisma,
   VoucherStatus,

@@ -1,0 +1,15 @@
+# Every pull request needs a review from an owner before it can merge.
+# GitHub requests this review automatically when a PR is opened.
+#
+# Replace @Naveen17000 with the org team once the team accounts exist.
+*                       @Naveen17000
+
+# The money. Nothing here changes without a deliberate, careful look.
+/apps/api/src/invoices/gst-calculator.ts   @Naveen17000
+/apps/api/src/accounting/                  @Naveen17000
+/apps/api/prisma/schema.prisma             @Naveen17000
+
+# Auth, tenancy and CI: the things that keep the books private and shippable.
+/apps/api/src/auth/                        @Naveen17000
+/apps/api/src/companies/guards/            @Naveen17000
+/.github/                                  @Naveen17000
