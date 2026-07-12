@@ -65,8 +65,8 @@ export function AuthShell({
             transition={{ duration: 0.5, delay: 0.1 }}
             className="mt-3 max-w-md text-sm text-white/80"
           >
-            GST invoicing, double-entry accounting, inventory, POS and payroll —
-            built for Indian SMEs.
+            GST invoicing, estimates, purchases, stock and double-entry
+            accounting — built for Indian businesses.
           </motion.p>
 
           <motion.div

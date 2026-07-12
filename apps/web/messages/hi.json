@@ -97,7 +97,9 @@
       "proformaInvoices": "प्रोफ़ॉर्मा इनवॉइस",
       "printSettings": "प्रिंट सेटिंग्स",
       "paymentIn": "भुगतान प्राप्त",
-      "paymentOut": "भुगतान दिया"
+      "paymentOut": "भुगतान दिया",
+      "estimatePayments": "अनुमान बैंकिंग",
+      "invoicePayments": "चालान बैंकिंग"
     },
     "titles": {
       "overview": "अवलोकन",
@@ -129,7 +131,9 @@
       "proforma-invoices": "प्रोफ़ॉर्मा इनवॉइस",
       "print-settings": "प्रिंट सेटिंग्स",
       "payment-in": "भुगतान प्राप्त",
-      "payment-out": "भुगतान दिया"
+      "payment-out": "भुगतान दिया",
+      "estimate-payments": "अनुमान बैंकिंग",
+      "invoice-payments": "चालान बैंकिंग"
     },
     "roles": {
       "OWNER": "मालिक",
@@ -207,7 +211,9 @@
       "mfaCode": "प्रमाणीकरण कोड",
       "mfaHint": "अपने ऑथेंटिकेटर ऐप से 6-अंकों का कोड, या एक अप्रयुक्त रिकवरी कोड दर्ज करें।",
       "mfaVerify": "सत्यापित करें और साइन इन करें",
-      "mfaBack": "← पासवर्ड पर वापस जाएं"
+      "mfaBack": "← पासवर्ड पर वापस जाएं",
+      "fiscalYear": "वित्तीय वर्ष",
+      "fiscalYearHint": "वह वर्ष जिसमें आप काम करना चाहते हैं। नए दस्तावेज़ इसी वर्ष में क्रमांकित होंगे।"
     },
     "register": {
       "title": "अपना खाता बनाएं",
@@ -639,7 +645,8 @@
     "logoTooBig": "छवि बहुत बड़ी है (अधिकतम 250KB)।",
     "logoBadType": "PNG, JPEG या WEBP छवि का उपयोग करें।",
     "printNameLabel": "प्रिंट नाम (दस्तावेज़ों पर दिखेगा)",
-    "printNamePlaceholder": "SHARMA TEXTILES"
+    "printNamePlaceholder": "SHARMA TEXTILES",
+    "noCompany": "अभी तक कोई व्यवसाय सेट अप नहीं किया गया है। इसे बनाने के लिए seed स्क्रिप्ट चलाएँ।"
   },
   "invoices": {
     "searchPlaceholder": "इनवॉइस नंबर, ग्राहक, स्थिति खोजें…",

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Card } from '@/components/ui';
-import { InvoiceTemplateCard } from './branches-tab';
+import { InvoiceTemplateCard } from './company-settings-cards';
 
 /** Document types that have their own customizable print layout. */
 const FORMS = [

@@ -97,7 +97,9 @@
       "proformaInvoices": "புரோஃபார்மா விலைப்பட்டியல்கள்",
       "printSettings": "அச்சு அமைப்புகள்",
       "paymentIn": "பணம் வரவு",
-      "paymentOut": "பணம் செலவு"
+      "paymentOut": "பணம் செலவு",
+      "estimatePayments": "மதிப்பீட்டு வங்கி",
+      "invoicePayments": "விலைப்பட்டியல் வங்கி"
     },
     "titles": {
       "overview": "மேலோட்டம்",
@@ -129,7 +131,9 @@
       "proforma-invoices": "புரோஃபார்மா விலைப்பட்டியல்கள்",
       "print-settings": "அச்சு அமைப்புகள்",
       "payment-in": "பணம் வரவு",
-      "payment-out": "பணம் செலவு"
+      "payment-out": "பணம் செலவு",
+      "estimate-payments": "மதிப்பீட்டு வங்கி",
+      "invoice-payments": "விலைப்பட்டியல் வங்கி"
     },
     "roles": {
       "OWNER": "உரிமையாளர்",
@@ -207,7 +211,9 @@
       "mfaCode": "உறுதிப்படுத்தல் குறியீடு",
       "mfaHint": "உங்கள் authenticator செயலியின் 6-இலக்கக் குறியீட்டை அல்லது பயன்படுத்தாத மீட்புக் குறியீட்டை உள்ளிடவும்.",
       "mfaVerify": "சரிபார்த்து உள்நுழை",
-      "mfaBack": "← கடவுச்சொல்லுக்குத் திரும்பு"
+      "mfaBack": "← கடவுச்சொல்லுக்குத் திரும்பு",
+      "fiscalYear": "நிதியாண்டு",
+      "fiscalYearHint": "நீங்கள் பணியாற்ற விரும்பும் ஆண்டு. புதிய ஆவணங்கள் இந்த ஆண்டில் எண்ணிடப்படும்."
     },
     "register": {
       "title": "உங்கள் கணக்கை உருவாக்குங்கள்",
@@ -639,7 +645,8 @@
     "logoTooBig": "படம் மிகப் பெரியது (அதிகபட்சம் 250KB).",
     "logoBadType": "PNG, JPEG அல்லது WEBP படத்தைப் பயன்படுத்தவும்.",
     "printNameLabel": "அச்சு பெயர் (ஆவணங்களில் காட்டப்படும்)",
-    "printNamePlaceholder": "SHARMA TEXTILES"
+    "printNamePlaceholder": "SHARMA TEXTILES",
+    "noCompany": "இதுவரை எந்த வணிகமும் அமைக்கப்படவில்லை. அதை உருவாக்க seed ஸ்கிரிப்டை இயக்கவும்."
   },
   "invoices": {
     "searchPlaceholder": "விலைப்பட்டியல் எண், வாடிக்கையாளர், நிலை தேடுங்கள்…",

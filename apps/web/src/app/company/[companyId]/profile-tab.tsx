@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useFeedback } from '@/components/feedback';
 import { Button, Card, ErrorText, Input, Label, Select } from '@/components/ui';
 import { api, ApiError } from '@/lib/api';
-import { UpiSettingsCard } from './branches-tab';
+import { UpiSettingsCard } from './company-settings-cards';
 
 /**
  * Business profile (seller identity printed on documents). The print-layout

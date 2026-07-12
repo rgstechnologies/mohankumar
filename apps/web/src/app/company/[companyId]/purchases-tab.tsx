@@ -8,27 +8,15 @@ import { useFeedback } from '@/components/feedback';
 import { Button, Card, ErrorText, Input, Select } from '@/components/ui';
 import {
   inr,
-  parseBillAi,
   type ItemRow,
   type LedgerRow,
   type PartyRow,
   type PurchaseBillView,
 } from '@/lib/accounting';
 import { api, ApiError, downloadFile, printFile } from '@/lib/api';
-import { OpeningDocsCard } from './opening-docs-card';
-import { AiSparkle } from '@/components/icons';
 import { RowActions } from '@/components/row-actions';
 import { useDeleteDocument } from '@/components/use-delete-document';
 
-/** ArrayBuffer → base64 without blowing the call stack on multi-MB scans. */
-function toBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(binary);
-}
 
 const STATUS_STYLE: Record<string, string> = {
   PAID: 'bg-emerald-50 text-emerald-700',
@@ -46,7 +34,6 @@ export function PurchasesTab({
   bills,
   canBill,
   canCancel,
-  aiEnabled,
   onChanged,
 }: {
   companyId: string;
@@ -57,7 +44,6 @@ export function PurchasesTab({
   bills: PurchaseBillView[];
   canBill: boolean;
   canCancel: boolean;
-  aiEnabled: boolean;
   onChanged: () => Promise<void>;
 }) {
   const t = useTranslations('purchases');
@@ -73,38 +59,6 @@ export function PurchasesTab({
     (b) => `${b.billNo} ${b.supplierBillNo ?? ''} ${b.party.name} ${b.paymentStatus}`,
   );
   const { toast, confirm } = useFeedback();
-
-  const [scanning, setScanning] = useState(false);
-  const scanRef = useRef<HTMLInputElement>(null);
-  // When purchase payments reconcile against purchase estimates, bills must not
-  // expose a Pay action — all Payment Out flows through the purchase estimate.
-  const [estimateLinked, setEstimateLinked] = useState(false);
-  useEffect(() => {
-    api
-      .get<{ purchasePaymentLink?: string }>(`/companies/${companyId}`)
-      .then((c) => setEstimateLinked(c.purchasePaymentLink === 'purchaseEstimate'))
-      .catch(() => {});
-  }, [companyId]);
-
-  async function onScanFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setScanning(true);
-    try {
-      const draft = await parseBillAi(companyId, file.name, toBase64(await file.arrayBuffer()));
-      // Hand the AI-parsed draft to the full-page entry form.
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.setItem(`purchase-bill-draft:${companyId}`, JSON.stringify(draft));
-      }
-      toast(t('ai.drafted'));
-      router.push(`/company/${companyId}/purchases/new`);
-    } catch (err) {
-      toast(err instanceof ApiError ? err.message : tc('somethingWentWrong'), 'error');
-    } finally {
-      setScanning(false);
-      if (scanRef.current) scanRef.current.value = '';
-    }
-  }
 
   async function cancelBill(billId: string) {
     const ok = await confirm({
@@ -141,13 +95,6 @@ export function PurchasesTab({
 
   return (
     <div className="space-y-4">
-      <OpeningDocsCard
-        companyId={companyId}
-        kind="PAYABLE"
-        ledgers={ledgers}
-        canSettle={canBill}
-        onChanged={onChanged}
-      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchInput
           value={table.query}
@@ -157,25 +104,6 @@ export function PurchasesTab({
         <ExportButtons companyId={companyId} report="purchases" />
         {canBill && (
           <div className="flex items-center gap-2">
-            {aiEnabled && (
-              <>
-                <input
-                  ref={scanRef}
-                  type="file"
-                  accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
-                  className="hidden"
-                  onChange={onScanFile}
-                />
-                <Button
-                  variant="secondary"
-                  onClick={() => scanRef.current?.click()}
-                  disabled={scanning}
-                  title={t('ai.hint')}
-                >
-                  <AiSparkle className="h-4 w-4" /> {scanning ? t('ai.scanning') : t('ai.scan')}
-                </Button>
-              </>
-            )}
             <Button
               variant="primary"
               onClick={() => router.push(`/company/${companyId}/purchases/new`)}
@@ -223,7 +151,6 @@ export function PurchasesTab({
                   cashBankLedgers={cashBankLedgers}
                   canBill={canBill}
                   canCancel={canCancel}
-                  estimateLinked={estimateLinked}
                   onChanged={onChanged}
                   onDownload={() => downloadPdf(bill)}
                   onPrint={() => printPdf(bill)}
@@ -252,7 +179,6 @@ function BillRow({
   cashBankLedgers,
   canBill,
   canCancel,
-  estimateLinked,
   onChanged,
   onDownload,
   onPrint,
@@ -264,7 +190,6 @@ function BillRow({
   cashBankLedgers: LedgerRow[];
   canBill: boolean;
   canCancel: boolean;
-  estimateLinked: boolean;
   onChanged: () => Promise<void>;
   onDownload: () => void;
   onPrint: () => void;
@@ -326,7 +251,7 @@ function BillRow({
             primary={{ label: 'PDF', onClick: onDownload }}
             actions={[
               { label: tc('print'), onClick: onPrint },
-              ...(canBill && bill.status === 'ISSUED' && bill.outstanding > 0 && !estimateLinked
+              ...(canBill && bill.status === 'ISSUED' && bill.outstanding > 0
                 ? [{
                     label: showPay ? t('row.close') : t('row.pay'),
                     onClick: () => setShowPay(!showPay),

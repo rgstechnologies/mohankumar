@@ -11,8 +11,6 @@ import {
   fetchEstimates,
   fetchParty,
   fetchPartyStatement,
-  fetchPurchaseEstimates,
-  fetchPurchaseOrders,
   inr,
   resolveGstin,
   type LedgerRow,
@@ -20,7 +18,6 @@ import {
   type PartyStatement,
 } from '@/lib/accounting';
 import { api, ApiError } from '@/lib/api';
-import type { PoView } from './purchase-orders-tab';
 
 interface PartyDraft {
   id?: string;
@@ -681,22 +678,9 @@ function PartyRowItem({
         )
         .catch(() => setAdvanceOpts([]));
     } else {
-      // Vendors: their open purchase orders + purchase estimates.
-      Promise.all([
-        fetchPurchaseOrders(companyId).catch(() => [] as unknown[]),
-        fetchPurchaseEstimates(companyId).catch(() => []),
-      ])
-        .then(([pos, pes]) =>
-          setAdvanceOpts([
-            ...(pos as PoView[])
-              .filter((p) => p.party.id === party.id && p.status !== 'CANCELLED')
-              .map((p) => ({ id: p.id, label: p.poNo, kind: 'po' as const })),
-            ...pes
-              .filter((e) => e.party.id === party.id && e.status === 'OPEN')
-              .map((e) => ({ id: e.id, label: e.estimateNo, kind: 'pe' as const })),
-          ]),
-        )
-        .catch(() => setAdvanceOpts([]));
+      // Vendors have no advance-linkable document in this build (no purchase
+      // orders / vendor quotations) — payments to them settle purchase bills.
+      setAdvanceOpts([]);
     }
   }
 

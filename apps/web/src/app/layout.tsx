@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from 'next';
 import { DM_Sans } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getLocale, getMessages } from 'next-intl/server';
-import { ContactWidget } from '@/components/contact-widget';
 import { FeedbackProvider } from '@/components/feedback';
 import { NoScrollNumber } from '@/components/no-scroll-number';
 import { ThemeProvider } from '@/components/theme';
@@ -47,7 +46,7 @@ export default async function RootLayout({
             <NoScrollNumber />
             <FeedbackProvider>
               {children}
-              <ContactWidget />
+
             </FeedbackProvider>
           </ThemeProvider>
         </NextIntlClientProvider>

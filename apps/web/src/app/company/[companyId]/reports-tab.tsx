@@ -4,11 +4,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ExportButtons } from '@/components/table';
 import { useFeedback } from '@/components/feedback';
-import { MicButton } from '@/components/mic-button';
-import { Button, Card, ErrorText, HelpTip, Input } from '@/components/ui';
-import { askReportsAi, inr, type AiReportAnswer } from '@/lib/accounting';
+import { Button, Card, HelpTip } from '@/components/ui';
+import { inr } from '@/lib/accounting';
 import { api, ApiError, downloadFile } from '@/lib/api';
-import { AiSparkle } from '@/components/icons';
 
 type Report = 'trial-balance' | 'profit-loss' | 'balance-sheet' | 'gstr1' | 'gstr3b';
 
@@ -40,8 +38,6 @@ export function ReportsTab({ companyId }: { companyId: string }) {
 
   return (
     <div className="space-y-4">
-      <AskAi companyId={companyId} />
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-surface p-1">
           {REPORTS.map((r) => (
@@ -112,121 +108,6 @@ function PortalJsonButton({ companyId }: { companyId: string }) {
       </Button>
       <HelpTip text={t('portalJson.hint')} />
     </span>
-  );
-}
-
-function AskAi({ companyId }: { companyId: string }) {
-  const t = useTranslations('reports');
-  const [question, setQuestion] = useState('');
-  const [history, setHistory] = useState<AiReportAnswer[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-
-  async function ask(input: { question?: string; audio?: string }) {
-    setError('');
-    setBusy(true);
-    try {
-      const result = await askReportsAi(companyId, input);
-      setHistory((prev) => [...prev, result]);
-      setQuestion('');
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t('ai.failed'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="rounded-md border border-line bg-surface shadow-sm">
-      <div className="space-y-3 rounded-md bg-surface p-4">
-        <div className="flex items-center gap-2 text-sm font-medium text-ink">
-          <AiSparkle className="h-4 w-4 text-brand-600" />
-          {t('ai.title')}
-          <HelpTip text={t('ai.hint')} />
-        </div>
-
-        {history.length === 0 && (
-          <div className="flex flex-wrap gap-2">
-            {(['s1', 's2', 's3'] as const).map((key) => (
-              <button
-                key={key}
-                type="button"
-                disabled={busy}
-                onClick={() => void ask({ question: t(`ai.${key}`) })}
-                className="rounded-full border border-brand-200 bg-brand-50 px-3 py-1 text-xs text-brand-700 hover:bg-brand-100 disabled:opacity-50"
-              >
-                {t(`ai.${key}`)}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {history.map((entry, i) => (
-          <div key={i} className="space-y-2 border-t border-line pt-3 first:border-t-0 first:pt-0">
-            <p className="text-sm font-medium text-ink">{entry.question}</p>
-            <p className="whitespace-pre-line text-sm text-muted">{entry.answer}</p>
-            {entry.table && (
-              <div className="overflow-x-auto">
-                <table className="min-w-[50%] text-sm">
-                  {entry.table.title && (
-                    <caption className="pb-1 text-left text-xs font-medium text-muted">
-                      {entry.table.title}
-                    </caption>
-                  )}
-                  <thead>
-                    <tr className="border-b border-line bg-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                      {entry.table.columns.map((col, j) => (
-                        <th key={j} className="pb-1 pr-6 last:pr-0">
-                          {col}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entry.table.rows.map((row, j) => (
-                      <tr key={j} className="border-b border-line last:border-0 hover:bg-subtle">
-                        {row.map((cell, k) => (
-                          <td
-                            key={k}
-                            className={`py-1 pr-6 last:pr-0 ${
-                              typeof cell === 'number' ? 'tabular-nums' : ''
-                            }`}
-                          >
-                            {typeof cell === 'number' ? inr(cell) : cell}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ))}
-
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (question.trim().length >= 3) void ask({ question: question.trim() });
-          }}
-          className="flex flex-wrap items-center gap-2"
-        >
-          <Input
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder={t('ai.placeholder')}
-            maxLength={500}
-            className="min-w-64 flex-1"
-            disabled={busy}
-          />
-          <MicButton disabled={busy} onAudio={(audio) => ask({ audio })} />
-          <Button type="submit" disabled={busy || question.trim().length < 3}>
-            {busy ? t('ai.asking') : t('ai.ask')}
-          </Button>
-        </form>
-        <ErrorText>{error}</ErrorText>
-      </div>
-    </div>
   );
 }
 

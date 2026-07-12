@@ -3,12 +3,12 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AuthShell } from '@/components/auth-shell';
 import { FloatingInput } from '@/components/auth/floating-input';
 import { MagneticButton } from '@/components/auth/magnetic-button';
-import { Button, ErrorText, Input, Label } from '@/components/ui';
-import { ApiError, login, mfaVerifyLogin } from '@/lib/api';
+import { Button, ErrorText, Input, Label, Select } from '@/components/ui';
+import { ApiError, fetchFiscalYears, login, mfaVerifyLogin } from '@/lib/api';
 
 export default function LoginPage() {
   const t = useTranslations('auth.login');
@@ -23,12 +23,26 @@ export default function LoginPage() {
   const [mfaToken, setMfaToken] = useState('');
   const [mfaCode, setMfaCode] = useState('');
 
+  // The financial year to open the books in. The list comes from the server —
+  // the year the business started, through to the current one — and grows on its
+  // own as the calendar rolls past 1 April. Defaults to the current year.
+  const [years, setYears] = useState<string[]>([]);
+  const [fiscalYear, setFiscalYear] = useState('');
+  useEffect(() => {
+    fetchFiscalYears()
+      .then(({ fiscalYears, current }) => {
+        setYears(fiscalYears);
+        setFiscalYear(current);
+      })
+      .catch(() => {});
+  }, []);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
     setBusy(true);
     try {
-      const result = await login(identifier, password);
+      const result = await login(identifier, password, fiscalYear || undefined);
       if ('mfaRequired' in result) {
         setMfaToken(result.mfaToken);
         setBusy(false);
@@ -61,14 +75,6 @@ export default function LoginPage() {
     <AuthShell
       title={tAuth('signIn')}
       subtitle={t('subtitle')}
-      footer={
-        <>
-          {t('newHere')}{' '}
-          <Link href="/register" className="font-semibold text-brand-600 hover:underline">
-            {t('createAccount')}
-          </Link>
-        </>
-      }
     >
         {mfaToken ? (
           <form onSubmit={onMfaSubmit} className="space-y-4">
@@ -120,6 +126,22 @@ export default function LoginPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
+          {years.length > 0 && (
+            <div>
+              <Label>{t('fiscalYear')}</Label>
+              <Select
+                value={fiscalYear}
+                onChange={(e) => setFiscalYear(e.target.value)}
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>
+                    {y}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted">{t('fiscalYearHint')}</p>
+            </div>
+          )}
           <ErrorText>{error}</ErrorText>
           <MagneticButton type="submit" loading={busy} success={success}>
             {tAuth('signIn')}

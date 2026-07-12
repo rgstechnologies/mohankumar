@@ -13,7 +13,6 @@ import {
   fetchInvoices,
   fetchPartyPayments,
   fetchPurchaseBills,
-  fetchPurchaseEstimates,
   inr,
   type BankAccountRow,
   type LedgerRow,
@@ -25,7 +24,7 @@ import { api, ApiError } from '@/lib/api';
 const METHODS = ['CASH', 'BANK', 'UPI', 'CARD', 'CHEQUE', 'OTHER'] as const;
 
 /** Which document kind a row settles against — drives the payment endpoint. */
-type DocKind = 'invoice' | 'bill' | 'estimate' | 'purchaseEstimate';
+type DocKind = 'invoice' | 'bill' | 'estimate';
 
 interface OpenDoc {
   id: string;
@@ -50,10 +49,17 @@ interface HistoryDoc {
  * party (or add one), see their open invoices/bills + transaction history on
  * the right, and allocate a receipt/payment across specific documents — plus
  * any leftover recorded on-account. Reuses the per-document payment endpoints.
+ *
+ * `docKind` splits Payment-In into the two banking screens the business asked
+ * for: "Estimate Banking" settles estimates, "Invoice Banking" settles GST
+ * invoices. Each customer is tracked against exactly one of the two (Customers
+ * → "Track balance by"), so a customer appears on one screen and never both —
+ * which is what stops the same rupee being counted as due twice.
  */
 export function PaymentPage({
   companyId,
   mode,
+  docKind,
   parties,
   ledgers,
   canManage,
@@ -61,6 +67,8 @@ export function PaymentPage({
 }: {
   companyId: string;
   mode: 'in' | 'out';
+  /** Payment-In only: show customers tracked by estimates, or by invoices. */
+  docKind?: 'estimate' | 'invoice';
   parties: PartyRow[];
   ledgers: LedgerRow[];
   canManage: boolean;
@@ -73,8 +81,11 @@ export function PaymentPage({
   const partyType = isIn ? 'CUSTOMER' : 'VENDOR';
 
   const people = useMemo(
-    () => parties.filter((p) => p.type === partyType),
-    [parties, partyType],
+    () =>
+      parties.filter(
+        (p) => p.type === partyType && (!docKind || p.docType === docKind),
+      ),
+    [parties, partyType, docKind],
   );
   const cashBank = useMemo(
     () => ledgers.filter((l) => ['Cash-in-Hand', 'Bank Accounts'].includes(l.group.name)),
@@ -117,12 +128,10 @@ export function PaymentPage({
   }, [people]);
 
   const selectedParty = people.find((p) => p.id === partyId) ?? null;
-  // The document this party reconciles against is now PER-PARTY (Profile →
-  // "Track balance by"), not a company-wide switch. Estimate-tracked parties
-  // settle estimates; invoice-tracked parties settle invoices — never mixed.
-  const useEstimate = isIn
-    ? selectedParty?.docType === 'estimate'
-    : selectedParty?.docType === 'purchaseEstimate';
+  // Payment-In: the screen itself fixes the document (Estimate Banking vs
+  // Invoice Banking) and only lists customers tracked that way. Payment-Out
+  // always settles purchase bills.
+  const useEstimate = isIn && docKind === 'estimate';
 
   const loadParty = useCallback(
     async (pid: string) => {
@@ -136,17 +145,13 @@ export function PaymentPage({
       try {
         const pays = await fetchPartyPayments(companyId, pid).catch(() => []);
         setPayHistory(pays);
-        // Money paid so far against a specific estimate / purchase-estimate.
+        // Money paid so far against a specific estimate.
         const paidFor = (docId: string) =>
           pays
-            .filter((p) => p.estimateId === docId || p.purchaseEstimateId === docId)
+            .filter((p) => p.estimateId === docId)
             .reduce((s, p) => s + p.amount, 0);
 
-        // Resolve this party's tracked doc type (per-party, not company-wide).
-        const dt = people.find((p) => p.id === pid)?.docType;
-        const partyUsesEstimate = isIn ? dt === 'estimate' : dt === 'purchaseEstimate';
-
-        if (isIn && partyUsesEstimate) {
+        if (useEstimate) {
           const ests = (await fetchEstimates(companyId).catch(() => []))
             .filter((e) => e.party.id === pid && e.status !== 'CANCELLED');
           const rows = ests.map((e) => {
@@ -178,27 +183,6 @@ export function PaymentPage({
           setHistory(
             invs
               .map((i) => ({ no: i.invoiceNo, date: i.date, total: i.total, paid: i.total - i.outstanding, outstanding: i.outstanding, isBill: false }))
-              .sort((a, b) => b.date.localeCompare(a.date)),
-          );
-        } else if (partyUsesEstimate) {
-          const pes = (await fetchPurchaseEstimates(companyId).catch(() => []))
-            .filter((e) => e.party.id === pid && e.status !== 'CANCELLED');
-          const rows = pes.map((e) => {
-            const paid = paidFor(e.id);
-            return {
-              id: e.id,
-              no: e.estimateNo,
-              date: e.date,
-              total: e.total,
-              paid,
-              outstanding: Math.max(0, Math.round((e.total - paid) * 100) / 100),
-              kind: 'purchaseEstimate' as const,
-            };
-          });
-          setOpenDocs(rows.filter((r) => r.outstanding > 0));
-          setHistory(
-            rows
-              .map((r) => ({ no: r.no, date: r.date, total: r.total, paid: r.paid, outstanding: r.outstanding, isBill: false }))
               .sort((a, b) => b.date.localeCompare(a.date)),
           );
         } else {
@@ -293,7 +277,7 @@ export function PaymentPage({
           if (pay <= 0) continue;
           await api.post(`/companies/${companyId}/parties/${partyId}/payments`, {
             amount: pay,
-            [d.kind === 'estimate' ? 'estimateId' : 'purchaseEstimateId']: d.id,
+            estimateId: d.id,
             ...base,
           });
           remaining = Math.round((remaining - pay) * 100) / 100;

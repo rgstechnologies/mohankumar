@@ -274,9 +274,21 @@ export async function printFile(path: string): Promise<void> {
 
 export interface AuthResult {
   user: { id: string; email: string; name: string };
+  /** The financial year this session is working in, e.g. "2026-27". */
+  fiscalYear: string;
   /** Present for native (Bearer) clients; the web app authenticates via cookies. */
   accessToken?: string;
   refreshToken?: string;
+}
+
+/** The years the business has books for — feeds the login year picker. */
+export interface FiscalYears {
+  fiscalYears: string[];
+  current: string;
+}
+
+export function fetchFiscalYears(): Promise<FiscalYears> {
+  return api.get<FiscalYears>('/auth/fiscal-years');
 }
 
 export interface Membership {
@@ -317,10 +329,12 @@ export interface MfaChallenge {
 export async function login(
   identifier: string,
   password: string,
+  fiscalYear?: string,
 ): Promise<AuthResult | MfaChallenge> {
   const result = await api.post<AuthResult | MfaChallenge>('/auth/login', {
     identifier,
     password,
+    ...(fiscalYear && { fiscalYear }),
   });
   if (!('mfaRequired' in result)) {
     setAuthFlag(true);
@@ -348,24 +362,8 @@ export const mfaEnable = (code: string) =>
 export const mfaDisable = (code: string) =>
   api.post<{ enabled: boolean }>('/auth/mfa/disable', { code });
 
-export async function register(
-  name: string,
-  email: string,
-  phone: string,
-  password: string,
-  accountType: 'BUSINESS' | 'AUDITOR' = 'BUSINESS',
-): Promise<AuthResult> {
-  const result = await api.post<AuthResult>('/auth/register', {
-    name,
-    email,
-    phone,
-    password,
-    accountType,
-  });
-  setAuthFlag(true);
-  if (isNative()) storeTokens(result);
-  return result;
-}
+// No register(): this build has no public sign-up. Accounts are provisioned
+// by the operator via `npm run db:seed`.
 
 export async function logout(): Promise<void> {
   const body = isNative() ? { refreshToken: readToken(REFRESH_TOKEN) } : {};

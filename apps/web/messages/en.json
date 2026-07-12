@@ -97,7 +97,9 @@
       "proformaInvoices": "Proforma Invoices",
       "printSettings": "Print Settings",
       "paymentIn": "Payment In",
-      "paymentOut": "Payment Out"
+      "paymentOut": "Payment Out",
+      "estimatePayments": "Estimate Banking",
+      "invoicePayments": "Invoice Banking"
     },
     "titles": {
       "overview": "Overview",
@@ -129,7 +131,9 @@
       "proforma-invoices": "Proforma Invoices",
       "print-settings": "Print Settings",
       "payment-in": "Payment In",
-      "payment-out": "Payment Out"
+      "payment-out": "Payment Out",
+      "estimate-payments": "Estimate Banking",
+      "invoice-payments": "Invoice Banking"
     },
     "roles": {
       "OWNER": "Owner",
@@ -207,7 +211,9 @@
       "mfaCode": "Authentication code",
       "mfaHint": "Enter the 6-digit code from your authenticator app, or an unused recovery code.",
       "mfaVerify": "Verify & sign in",
-      "mfaBack": "← Back to password"
+      "mfaBack": "← Back to password",
+      "fiscalYear": "Financial year",
+      "fiscalYearHint": "The year you want to work in. New documents are numbered in this year."
     },
     "register": {
       "title": "Create your account",
@@ -639,7 +645,8 @@
     "logoTooBig": "Image is too large (max 250KB).",
     "logoBadType": "Use a PNG, JPEG or WEBP image.",
     "printNameLabel": "Print name (shown on documents)",
-    "printNamePlaceholder": "SHARMA TEXTILES"
+    "printNamePlaceholder": "SHARMA TEXTILES",
+    "noCompany": "No business has been set up yet. Run the seed script to create it."
   },
   "invoices": {
     "searchPlaceholder": "Search invoice no, customer, status…",

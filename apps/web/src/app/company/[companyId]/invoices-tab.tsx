@@ -16,8 +16,7 @@ import {
 import { api, ApiError, downloadFile, printFile } from '@/lib/api';
 import { RowActions } from '@/components/row-actions';
 import { useDeleteDocument } from '@/components/use-delete-document';
-import { OpeningDocsCard } from './opening-docs-card';
-import { InvoiceTemplateCard } from './branches-tab';
+import { InvoiceTemplateCard } from './company-settings-cards';
 
 const STATUS_STYLE: Record<string, string> = {
   PAID: 'bg-emerald-50 text-emerald-700',
@@ -111,13 +110,6 @@ export function InvoicesTab({
 
   return (
     <div className="space-y-4">
-      <OpeningDocsCard
-        companyId={companyId}
-        kind="RECEIVABLE"
-        ledgers={ledgers}
-        canSettle={canBill}
-        onChanged={onChanged}
-      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SearchInput
           value={table.query}
