@@ -41,21 +41,10 @@ export class CompanyRoleGuard implements CanActivate {
         userId_companyId: { userId: request.user.id, companyId },
       },
     });
+    // No bypass. Membership of the company is the only way in — there is no
+    // super-admin backdoor, because there is no console left to administer one
+    // and a standing privilege nobody can see is a privilege nobody can revoke.
     if (!membership) {
-      // Super-admins may VIEW any company for monitoring, but read-only:
-      // only safe GET requests are allowed; all writes are blocked.
-      const u = await this.prisma.user.findUnique({
-        where: { id: request.user.id },
-        select: { isSuperAdmin: true },
-      });
-      if (u?.isSuperAdmin) {
-        if (request.method !== 'GET') {
-          throw new ForbiddenException('Admin access to this company is read-only');
-        }
-        request.membershipRole = Role.AUDITOR;
-        request.membershipBranchId = null;
-        return true;
-      }
       throw new ForbiddenException('You are not a member of this company');
     }
 

@@ -20,6 +20,18 @@ import { PrismaService } from '../prisma/prisma.service';
 
 const BCRYPT_ROUNDS = 10;
 
+/**
+ * Brute-force defence for a single shared login.
+ *
+ * The per-IP throttler already caps attempts, but it is per-IP: a slow attack
+ * spread across many addresses walks straight past it. Locking the account after
+ * a handful of wrong passwords caps the total guess rate no matter where the
+ * attempts come from. The window is short enough that a legitimate user who
+ * fat-fingers their password waits minutes, not hours.
+ */
+const MAX_FAILED_LOGINS = 5;
+const LOCKOUT_MINUTES = 15;
+
 export interface TokenPair {
   accessToken: string;
   refreshToken: string;
@@ -70,8 +82,21 @@ export class AuthService {
     if (!user || !user.isActive) {
       throw new UnauthorizedException('Invalid email/phone or password');
     }
+    // Check the lock BEFORE the password: a locked account must not become an
+    // oracle that says "right password, but locked".
+    if (user.lockedUntil && user.lockedUntil > new Date()) {
+      const minutes = Math.max(
+        1,
+        Math.ceil((user.lockedUntil.getTime() - Date.now()) / 60_000),
+      );
+      throw new UnauthorizedException(
+        `Too many failed sign-in attempts. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`,
+      );
+    }
+
     const passwordOk = await bcrypt.compare(password, user.passwordHash);
     if (!passwordOk) {
+      await this.registerFailedLogin(user.id, user.failedLoginAttempts);
       throw new UnauthorizedException('Invalid email/phone or password');
     }
     if (user.isBlocked) {
@@ -93,11 +118,28 @@ export class AuthService {
       );
       return { mfaRequired: true as const, mfaToken };
     }
+    // A good password clears the failure count — the lock only ever punishes a
+    // run of wrong guesses, never a user who eventually gets it right.
     await this.prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() },
+      data: { lastLoginAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
     });
     return this.buildAuthResult(user, fy);
+  }
+
+  /** Counts a wrong password and locks the account once they pile up. */
+  private async registerFailedLogin(userId: string, current: number): Promise<void> {
+    const attempts = current + 1;
+    const locked = attempts >= MAX_FAILED_LOGINS;
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        failedLoginAttempts: locked ? 0 : attempts,
+        lockedUntil: locked
+          ? new Date(Date.now() + LOCKOUT_MINUTES * 60_000)
+          : undefined,
+      },
+    });
   }
 
   /**
@@ -286,7 +328,6 @@ export class AuthService {
         email: true,
         phone: true,
         name: true,
-        isSuperAdmin: true,
         totpEnabled: true,
         memberships: {
           select: {

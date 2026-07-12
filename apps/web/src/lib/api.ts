@@ -315,7 +315,6 @@ export interface Me {
   phone?: string | null;
   name: string;
   accountType?: 'BUSINESS' | 'AUDITOR';
-  isSuperAdmin: boolean;
   totpEnabled: boolean;
   subscription: SubscriptionSummary;
   memberships: Membership[];

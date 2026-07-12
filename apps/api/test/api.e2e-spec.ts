@@ -164,6 +164,41 @@ describe('ERP API (e2e)', () => {
     expect(wrongPass.body.message).toBe(noSuchUser.body.message);
   });
 
+  it('locks the account after repeated wrong passwords, then lets a good one back in', async () => {
+    // The single shared login means the password is the only thing guarding the
+    // books, so a run of wrong guesses has to stop being cheap.
+    const LOCKED = { email: 'lockme@test.local', password: 'e2e-lock-password' };
+    await prisma.user.create({
+      data: {
+        name: 'Lock Me',
+        email: LOCKED.email,
+        passwordHash: await bcrypt.hash(LOCKED.password, 10),
+      },
+    });
+
+    // 5 wrong passwords: the 5th trips the lock.
+    for (let i = 0; i < 5; i++) {
+      await login({ ...LOCKED, password: 'wrong' }).expect(401);
+    }
+
+    // Now even the CORRECT password is refused — the lock is not an oracle.
+    const locked = await login(LOCKED).expect(401);
+    expect(locked.body.message).toMatch(/too many failed sign-in attempts/i);
+
+    // Clearing the lock (as time would) lets the right password straight back in,
+    // proving the counter resets on success rather than latching forever.
+    await prisma.user.update({
+      where: { email: LOCKED.email },
+      data: { lockedUntil: null },
+    });
+    const ok = await login(LOCKED, FY).expect(200);
+    expect(ok.body.fiscalYear).toBe(FY);
+
+    const after = await prisma.user.findUniqueOrThrow({ where: { email: LOCKED.email } });
+    expect(after.failedLoginAttempts).toBe(0);
+    expect(after.lockedUntil).toBeNull();
+  });
+
   it('blocks unauthenticated requests', async () => {
     await request(http).get(`/api/v1/companies/${companyId}/invoices`).expect(401);
   });

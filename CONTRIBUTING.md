@@ -26,6 +26,28 @@ Read this once before your first pull request.
 
 ---
 
+## What this build is — and isn't
+
+One business, one login, a deliberately small feature set:
+
+Estimates · GST invoices · Purchase bills · Customers & vendors · Items · Stock ·
+Estimate Banking + Invoice Banking (the two payment screens) · Credit/debit notes ·
+Vouchers & ledgers · Reports (GSTR-1, GSTR-3B, trial balance, P&L, balance sheet) ·
+Profile.
+
+**Deliberately absent.** These were removed on purpose. Do not add them back
+because a page looks like it's missing something:
+
+payroll · POS · e-invoice (IRN) · e-way bill · auditor marketplace ·
+plans/billing/subscriptions · print designer · loyalty · expenses module ·
+data import · bank reconciliation · sales orders · delivery challans ·
+proforma invoices · purchase orders · branches · public sign-up ·
+public invoice-share links.
+
+If a client asks for one of these, it is a scope conversation, not a quick PR.
+
+---
+
 ## Branching
 
 Trunk-based. Short-lived branches, merged quickly. No long-running `develop`

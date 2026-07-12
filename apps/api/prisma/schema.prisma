@@ -19,10 +19,14 @@ model User {
   passwordHash     String
   name             String
   isActive         Boolean     @default(true)
-  /// Platform staff — full access to the /admin console.
-  isSuperAdmin     Boolean   @default(false)
   /// Blocked accounts cannot sign in.
   isBlocked        Boolean   @default(false)
+  /// Brute-force defence. This install has a single shared login, so the password
+  /// is the only thing between an attacker and the books. After MAX_FAILED_LOGINS
+  /// wrong passwords the account locks for a spell, which turns online guessing
+  /// from "thousands of tries an hour" into "a handful".
+  failedLoginAttempts Int      @default(0)
+  lockedUntil         DateTime?
   /// TOTP 2FA: secret exists once setup starts; enabled only after a code confirms.
   totpSecret       String?
   totpEnabled      Boolean   @default(false)
