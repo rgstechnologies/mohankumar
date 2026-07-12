@@ -1,0 +1,2450 @@
+// Bookly — database schema
+// Multi-tenant: every business-data table carries companyId.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------
+// Identity & tenancy
+// ---------------------------------------------------------------
+
+/// Distinguishes a business owner account from a standalone auditor/CA account.
+enum AccountType {
+  BUSINESS
+  AUDITOR
+}
+
+model User {
+  id               String      @id @default(uuid())
+  email            String      @unique
+  /// Optional on legacy accounts; required at new sign-ups. Stored normalized
+  /// (digits + optional leading +) so it can also be used to sign in.
+  phone            String?     @unique
+  passwordHash     String
+  name             String
+  /// BUSINESS owners run companies; AUDITOR accounts offer services + get
+  /// owner-granted read-only access to client companies. Cannot create companies.
+  accountType      AccountType @default(BUSINESS)
+  isActive         Boolean     @default(true)
+  /// Platform staff — full access to the /admin console.
+  isSuperAdmin     Boolean   @default(false)
+  /// Blocked accounts cannot sign in.
+  isBlocked        Boolean   @default(false)
+  /// TOTP 2FA: secret exists once setup starts; enabled only after a code confirms.
+  totpSecret       String?
+  totpEnabled      Boolean   @default(false)
+  /// SHA-256 hashes of single-use recovery codes.
+  mfaRecoveryCodes String[]  @default([])
+  lastLoginAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  memberships       CompanyUser[]
+  refreshTokens     RefreshToken[]
+  sentInvites       Invite[]             @relation("InvitedBy")
+  passwordResets    PasswordResetToken[]
+  subscription      UserSubscription?
+  paymentOrders     PaymentOrder[]
+  employeeProfiles  Employee[]
+  notificationReads NotificationRead[]
+  auditor           Auditor?
+  serviceRequests   ServiceRequest[]   @relation("ClientRequests")
+  clientQuotations  AuditorQuotation[] @relation("ClientQuotations")
+  serviceReviews    ServiceReview[]    @relation("ClientReviews")
+
+  @@map("users")
+}
+
+// ============================================================================
+// Auditor Services Marketplace — a standalone provider account (owned by a
+// User) that publishes services with fully self-controlled pricing tiers.
+// Bookly imposes no fixed pricing. Phase 1 = profile + services + tiers +
+// feature builder; quotations/reviews/analytics/browse come later.
+// ============================================================================
+model Auditor {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  displayName   String
+  firmName      String?
+  /// Short one-liner shown on cards.
+  tagline       String?
+  /// Detailed about/bio.
+  bio           String?
+  experienceYrs Int?
+  phone         String?
+  email         String?
+  city          String?
+  /// Full Indian state name (INDIAN_STATES in @bookly/shared).
+  state         String?
+  /// Logo/photo as a data: URL (base64).
+  logo          String?
+  /// Visible in the marketplace (Phase 2 browse).
+  isPublished   Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  /// Cached rating aggregates (Phase 3 reviews).
+  ratingAvg     Decimal  @default(0) @db.Decimal(3, 2)
+  ratingCount   Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user       User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  services   AuditorService[]
+  requests   ServiceRequest[]
+  quotations AuditorQuotation[]
+  reviews    ServiceReview[]
+  counter    AuditorCounter?
+
+  @@map("auditors")
+}
+
+model AuditorService {
+  id           String   @id @default(uuid())
+  auditorId    String
+  name         String
+  /// Free-text category (e.g. "GST Filing", "Income Tax", "Custom").
+  category     String?
+  shortDesc    String?
+  detailDesc   String?
+  /// Service image as a data: URL (base64).
+  image        String?
+  /// Human delivery time, e.g. "3-5 days".
+  deliveryTime String?
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditor  Auditor              @relation(fields: [auditorId], references: [id], onDelete: Cascade)
+  tiers    ServicePricingTier[]
+  requests ServiceRequest[]
+
+  @@index([auditorId])
+  @@map("auditor_services")
+}
+
+model ServicePricingTier {
+  id                  String   @id @default(uuid())
+  serviceId           String
+  name                String
+  price               Decimal  @db.Decimal(18, 2)
+  gstApplicable       Boolean  @default(false)
+  gstPercent          Decimal  @default(0) @db.Decimal(5, 2)
+  description         String?
+  deliveryTimeline    String?
+  /// Number of revisions included; null = unlimited.
+  revisions           Int?
+  prioritySupport     Boolean  @default(false)
+  dedicatedConsultant Boolean  @default(false)
+  /// Future-ready: one_time | monthly | annual | retainer | bundle | custom.
+  billingType         String   @default("one_time")
+  isActive            Boolean  @default(true)
+  sortOrder           Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  service  AuditorService @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  features TierFeature[]
+  requests ServiceRequest[]
+
+  @@index([serviceId])
+  @@map("service_pricing_tiers")
+}
+
+model TierFeature {
+  id        String  @id @default(uuid())
+  tierId    String
+  label     String
+  /// Included (✓) vs excluded (✗) — drives the comparison grid.
+  included  Boolean @default(true)
+  sortOrder Int     @default(0)
+
+  tier ServicePricingTier @relation(fields: [tierId], references: [id], onDelete: Cascade)
+
+  @@index([tierId])
+  @@map("tier_features")
+}
+
+// ---- Phase 2: client engagement (marketplace) ----
+
+enum ServiceRequestKind {
+  ENQUIRY
+  SERVICE
+  CUSTOM_QUOTE
+}
+
+enum ServiceRequestStatus {
+  NEW
+  REVIEWING
+  QUOTED
+  ACCEPTED
+  DECLINED
+  CLOSED
+}
+
+enum QuotationStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
+/// A client (a logged-in User) reaching out to an auditor about a service:
+/// a plain enquiry, a request to buy a tier, or a custom-quote request.
+model ServiceRequest {
+  id           String               @id @default(uuid())
+  auditorId    String
+  clientUserId String
+  serviceId    String?
+  tierId       String?
+  kind         ServiceRequestKind
+  message      String?
+  status       ServiceRequestStatus @default(NEW)
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  auditor    Auditor             @relation(fields: [auditorId], references: [id], onDelete: Cascade)
+  client     User                @relation("ClientRequests", fields: [clientUserId], references: [id], onDelete: Cascade)
+  service    AuditorService?     @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  tier       ServicePricingTier? @relation(fields: [tierId], references: [id], onDelete: SetNull)
+  quotations AuditorQuotation[]
+
+  @@index([auditorId, status])
+  @@index([clientUserId])
+  @@map("service_requests")
+}
+
+/// A custom quote an auditor sends a client. On accept it becomes the billable
+/// document (an invoice number is assigned).
+model AuditorQuotation {
+  id            String          @id @default(uuid())
+  auditorId     String
+  clientUserId  String
+  requestId     String?
+  quoteNo       String
+  description   String
+  amount        Decimal         @db.Decimal(18, 2)
+  gstApplicable Boolean         @default(false)
+  gstPercent    Decimal         @default(0) @db.Decimal(5, 2)
+  /// Billing cadence: one_time | monthly | annual | retainer | bundle | custom.
+  billingType   String          @default("one_time")
+  dueDate       DateTime?       @db.Date
+  notes         String?
+  status        QuotationStatus @default(PENDING)
+  /// Assigned when the client accepts — the quote becomes the invoice.
+  invoiceNo     String?
+  acceptedAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  auditor Auditor         @relation(fields: [auditorId], references: [id], onDelete: Cascade)
+  client  User            @relation("ClientQuotations", fields: [clientUserId], references: [id], onDelete: Cascade)
+  request ServiceRequest? @relation(fields: [requestId], references: [id], onDelete: SetNull)
+
+  @@index([auditorId, status])
+  @@index([clientUserId])
+  @@map("auditor_quotations")
+}
+
+/// A client's review of an auditor (Phase 3). One per client per auditor.
+model ServiceReview {
+  id           String   @id @default(uuid())
+  auditorId    String
+  clientUserId String
+  /// 1–5 stars.
+  rating       Int
+  comment      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  auditor Auditor @relation(fields: [auditorId], references: [id], onDelete: Cascade)
+  client  User    @relation("ClientReviews", fields: [clientUserId], references: [id], onDelete: Cascade)
+
+  @@unique([auditorId, clientUserId])
+  @@index([auditorId])
+  @@map("service_reviews")
+}
+
+/// Per-auditor sequential counters for quote + invoice numbers.
+model AuditorCounter {
+  auditorId     String @id
+  nextQuoteNo   Int    @default(1)
+  nextInvoiceNo Int    @default(1)
+
+  auditor Auditor @relation(fields: [auditorId], references: [id], onDelete: Cascade)
+
+  @@map("auditor_counters")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+enum SalesLeadStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
+/// Enterprise "Contact sales" enquiries from the public pricing page.
+/// Submitted unauthenticated; reviewed by platform staff in the admin console.
+model SalesLead {
+  id           String          @id @default(uuid())
+  name         String
+  companyName  String
+  email        String
+  phone        String
+  requirements String?
+  plan         String          @default("ENTERPRISE")
+  status       SalesLeadStatus @default(NEW)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([status, createdAt])
+  @@map("sales_leads")
+}
+
+model Invite {
+  id          String    @id @default(uuid())
+  email       String
+  companyId   String
+  role        Role
+  branchId    String?
+  tokenHash   String    @unique
+  invitedById String
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invitedBy User    @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+  branch    Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@map("invites")
+}
+
+model Company {
+  id                 String   @id @default(uuid())
+  name               String
+  /// Trade/display name printed on invoices, estimates & all documents.
+  /// Falls back to `name` when blank.
+  printName          String?
+  legalName          String?
+  gstin              String?
+  // Indian state code (first 2 digits of GSTIN) — drives CGST/SGST vs IGST
+  stateCode          String?
+  addressLine1       String?
+  addressLine2       String?
+  city               String?
+  pincode            String?
+  // Fiscal year start month, 4 = April (Indian FY)
+  fyStartMonth       Int      @default(4)
+  /// UPI VPA printed as a scan-to-pay QR on invoices (e.g. shop@okhdfcbank)
+  upiId              String?
+  // Seller contact details printed on invoices/estimates
+  phone              String?
+  email              String?
+  /// NIC e-way bill API credentials (created on ewaybillgst.gov.in →
+  /// Registration → For GSP). When both are set and Sandbox is configured,
+  /// e-way bills generate live through the portal; otherwise the built-in
+  /// simulator runs. The password is never returned by the API.
+  ewbApiUsername     String?
+  ewbApiPassword     String?
+  /// NIC e-invoice (IRP) API credentials (created on einvoice1.gst.gov.in →
+  /// API Registration → mapped to the GSP). Used to obtain a per-GSTIN IRP
+  /// session token so each customer files IRNs under their OWN taxpayer login,
+  /// mirroring the e-way bill credentials above. When absent and Sandbox is
+  /// live, e-invoicing is blocked (fail-closed); the simulator ignores them.
+  /// The password is stored encrypted and never returned by the API.
+  einvoiceApiUsername String?
+  einvoiceApiPassword String?
+  // Seller bank account printed on invoices for NEFT/RTGS payment
+  bankName           String?
+  bankAccountName    String?
+  bankAccountNo      String?
+  bankIfsc           String?
+  bankBranch         String?
+  /// Logo printed on invoices/estimates, stored as a data: URL (base64).
+  logo               String?
+  /// Editable invoice layout: accent colour, block toggles, title/terms/footer.
+  /// Acts as the default/fallback layout for every document type.
+  invoiceTemplate    Json?
+  /// Per-document-type print layouts, keyed by docKind (invoice, estimate,
+  /// proformaInvoice, salesOrder, deliveryChallan, purchaseEstimate). Each value
+  /// is an InvoiceTemplate; a missing key falls back to invoiceTemplate.
+  documentTemplates  Json?
+  /// Loyalty programme: customers earn points worth ~Re 1 each on sales.
+  loyaltyEnabled     Boolean  @default(false)
+  loyaltyEarnPercent Decimal  @default(0) @db.Decimal(5, 2)
+  /// Rupee value of one loyalty point when redeemed as an invoice discount.
+  loyaltyRedeemValue Decimal  @default(1) @db.Decimal(10, 2)
+  /// Which sales document the Payment-In screen reconciles against:
+  /// "invoice" (default) or "estimate" (estimate treated as the bill).
+  salesPaymentLink   String   @default("invoice")
+  /// Which purchase document Payment-Out reconciles against:
+  /// "purchase" (default) or "purchaseEstimate".
+  purchasePaymentLink String  @default("purchase")
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  members                  CompanyUser[]
+  invites                  Invite[]
+  accountGroups            AccountGroup[]
+  ledgers                  Ledger[]
+  vouchers                 Voucher[]
+  voucherCounters          VoucherCounter[]
+  parties                  Party[]
+  items                    Item[]
+  invoices                 Invoice[]
+  payments                 Payment[]
+  invoiceCounters          InvoiceCounter[]
+  purchaseBills            PurchaseBill[]
+  billPayments             BillPayment[]
+  purchaseBillCounters     PurchaseBillCounter[]
+  bankImportBatches        BankImportBatch[]
+  bankStatementLines       BankStatementLine[]
+  notes                    Note[]
+  noteCounters             NoteCounter[]
+  purchaseOrders           PurchaseOrder[]
+  grns                     Grn[]
+  poCounters               PoCounter[]
+  grnCounters              GrnCounter[]
+  branches                 Branch[]
+  itemBatches              ItemBatch[]
+  openingDocuments         OpeningDocument[]
+  jobWorks                 JobWork[]
+  jobWorkCounters          JobWorkCounter[]
+  stockTransfers           StockTransfer[]
+  stockTransferCounters    StockTransferCounter[]
+  employees                Employee[]
+  payRuns                  PayRun[]
+  estimates                Estimate[]
+  estimateCounters         EstimateCounter[]
+  proformaInvoices         ProformaInvoice[]
+  proformaInvoiceCounters  ProformaInvoiceCounter[]
+  purchaseEstimates        PurchaseEstimate[]
+  purchaseEstimateCounters PurchaseEstimateCounter[]
+  deliveryChallans         DeliveryChallan[]
+  deliveryChallanCounters  DeliveryChallanCounter[]
+  salesOrders              SalesOrder[]
+  salesOrderCounters       SalesOrderCounter[]
+  cheques                  Cheque[]
+  loyaltyTxns              LoyaltyTxn[]
+  notificationReads        NotificationRead[]
+  partyPayments            PartyPayment[]
+  bankAccounts             BankAccount[]
+  printTemplates           PrintTemplate[]
+
+  @@map("companies")
+}
+
+// ---------------------------------------------------------------
+// Print Template Designer — saved custom document designs
+//
+// A no-code, drag-and-drop layout (the @bookly/shared PrintDesign JSON) that
+// the PDFKit renderer can draw for a given document type. A company may keep
+// several per docKind; one can be flagged the default for that docKind.
+// ---------------------------------------------------------------
+model PrintTemplate {
+  id        String   @id @default(uuid())
+  companyId String
+  /// Which document this design renders: 'invoice' (Phase 1), later estimate etc.
+  docKind   String   @default("invoice")
+  name      String
+  /// The PrintDesign document (see @bookly/shared/print-design).
+  design    Json
+  /// At most one default per (companyId, docKind) — enforced in the service.
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, docKind])
+  @@map("print_templates")
+}
+
+// ---------------------------------------------------------------
+// Notification read-state (per user, per company)
+//
+// In-app alerts are computed on the fly from live data, so they have
+// stable category keys (e.g. "invoices-overdue") rather than rows.
+// We record which alert a user dismissed together with a hash of the
+// content they saw — so a category re-surfaces as unread when its
+// content changes (a new invoice goes overdue) but stays read while
+// unchanged.
+// ---------------------------------------------------------------
+
+model NotificationRead {
+  id             String   @id @default(uuid())
+  companyId      String
+  userId         String
+  /// Stable notification category key, e.g. "invoices-overdue".
+  notificationId String
+  /// Hash of title+detail at the moment it was marked read.
+  contentHash    String
+  readAt         DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, userId, notificationId])
+  @@index([companyId, userId])
+  @@map("notification_reads")
+}
+
+// ---------------------------------------------------------------
+// Branches (SRS 3.17 — centralized multi-branch management)
+// ---------------------------------------------------------------
+
+model Branch {
+  id        String   @id @default(uuid())
+  companyId String
+  name      String
+  city      String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoices          Invoice[]
+  purchaseBills     PurchaseBill[]
+  purchaseOrders    PurchaseOrder[]
+  members           CompanyUser[]
+  invites           Invite[]
+  employees         Employee[]
+  transfersOut      StockTransfer[]    @relation("TransferFrom")
+  transfersIn       StockTransfer[]    @relation("TransferTo")
+  estimates         Estimate[]
+  proformaInvoices  ProformaInvoice[]
+  purchaseEstimates PurchaseEstimate[]
+  deliveryChallans  DeliveryChallan[]
+  salesOrders       SalesOrder[]
+  cheques           Cheque[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("branches")
+}
+
+// ---------------------------------------------------------------
+// Accounting core — chart of accounts, ledgers, double-entry vouchers
+// ---------------------------------------------------------------
+
+/// The four fundamental account natures. Balance-sheet side and
+/// debit/credit interpretation derive from this.
+enum AccountNature {
+  ASSET
+  LIABILITY
+  INCOME
+  EXPENSE
+}
+
+/// Tally-style account group tree (Current Assets > Cash-in-Hand, ...).
+/// Seeded per company; users can add custom sub-groups.
+model AccountGroup {
+  id        String        @id @default(uuid())
+  companyId String
+  name      String
+  nature    AccountNature
+  parentId  String?
+  /// System groups are seeded and cannot be renamed/deleted.
+  isSystem  Boolean       @default(false)
+  createdAt DateTime      @default(now())
+
+  company  Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent   AccountGroup?  @relation("GroupTree", fields: [parentId], references: [id])
+  children AccountGroup[] @relation("GroupTree")
+  ledgers  Ledger[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("account_groups")
+}
+
+enum EntryType {
+  DEBIT
+  CREDIT
+}
+
+model Ledger {
+  id             String    @id @default(uuid())
+  companyId      String
+  groupId        String
+  name           String
+  openingBalance Decimal   @default(0) @db.Decimal(18, 2)
+  openingType    EntryType @default(DEBIT)
+  description    String?
+  /// System ledgers (Cash, Sales, GST ledgers...) are seeded; invoices post to them.
+  isSystem       Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  group              AccountGroup        @relation(fields: [groupId], references: [id])
+  lines              VoucherLine[]
+  party              Party?
+  bankBatches        BankImportBatch[]
+  bankStatementLines BankStatementLine[]
+  bankAccount        BankAccount?
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("ledgers")
+}
+
+/// A seller bank account. Each maps 1:1 to a "Bank Accounts" ledger (so receipts
+/// can be deposited into it) and carries the print details shown on documents.
+/// The default account is mirrored onto Company.bank* for the printed bank block.
+model BankAccount {
+  id          String   @id @default(uuid())
+  companyId   String
+  ledgerId    String   @unique
+  accountName String
+  bankName    String?
+  accountNo   String?
+  ifsc        String?
+  branch      String?
+  upiId       String?
+  isDefault   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ledger   Ledger    @relation(fields: [ledgerId], references: [id])
+  invoices Invoice[]
+
+  @@index([companyId])
+  @@map("bank_accounts")
+}
+
+enum VoucherType {
+  JOURNAL
+  PAYMENT
+  RECEIPT
+  CONTRA
+  SALES
+  PURCHASE
+  CREDIT_NOTE
+  DEBIT_NOTE
+}
+
+enum VoucherStatus {
+  ACTIVE
+  CANCELLED
+}
+
+model Voucher {
+  id          String        @id @default(uuid())
+  companyId   String
+  type        VoucherType
+  /// Sequential number within (company, type, fiscal year).
+  voucherNo   Int
+  /// e.g. "2026-27" — derived from company fiscal year settings.
+  fiscalYear  String
+  date        DateTime      @db.Date
+  narration   String?
+  status      VoucherStatus @default(ACTIVE)
+  createdById String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  company       Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lines         VoucherLine[]
+  invoice       Invoice?
+  payment       Payment?
+  purchaseBill  PurchaseBill?
+  payRun        PayRun?       @relation("PayRunVoucher")
+  payRunPayment PayRun?       @relation("PayRunPaymentVoucher")
+  billPayment   BillPayment?
+  note          Note?
+  partyPayment  PartyPayment?
+  estimate         Estimate?
+  purchaseEstimate PurchaseEstimate?
+
+  @@unique([companyId, type, fiscalYear, voucherNo])
+  @@index([companyId, date])
+  @@index([companyId, type])
+  @@map("vouchers")
+}
+
+model VoucherLine {
+  id        String    @id @default(uuid())
+  voucherId String
+  ledgerId  String
+  lineNo    Int
+  type      EntryType
+  amount    Decimal   @db.Decimal(18, 2)
+
+  voucher   Voucher            @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  ledger    Ledger             @relation(fields: [ledgerId], references: [id])
+  bankMatch BankStatementLine?
+
+  @@index([ledgerId])
+  @@index([voucherId])
+  @@map("voucher_lines")
+}
+
+/// Race-safe sequential voucher numbering per (company, type, fiscal year).
+model VoucherCounter {
+  companyId  String
+  type       VoucherType
+  fiscalYear String
+  nextNo     Int         @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, type, fiscalYear])
+  @@map("voucher_counters")
+}
+
+// ---------------------------------------------------------------
+// Banking — imported statements + reconciliation
+// ---------------------------------------------------------------
+
+/// One uploaded bank statement file (CSV) for a bank ledger.
+model BankImportBatch {
+  id         String   @id @default(uuid())
+  companyId  String
+  ledgerId   String
+  fileName   String
+  lineCount  Int
+  importedAt DateTime @default(now())
+
+  company Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ledger  Ledger              @relation(fields: [ledgerId], references: [id])
+  lines   BankStatementLine[]
+
+  @@index([companyId, ledgerId])
+  @@map("bank_import_batches")
+}
+
+/// A single row from a bank statement. `type` is the BOOK-side entry it
+/// should match: money INTO the bank = DEBIT (asset up), money out = CREDIT.
+model BankStatementLine {
+  id                   String    @id @default(uuid())
+  batchId              String
+  companyId            String
+  ledgerId             String
+  date                 DateTime  @db.Date
+  description          String
+  amount               Decimal   @db.Decimal(18, 2)
+  type                 EntryType
+  matchedVoucherLineId String?   @unique
+  createdAt            DateTime  @default(now())
+
+  batch       BankImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ledger      Ledger          @relation(fields: [ledgerId], references: [id])
+  matchedLine VoucherLine?    @relation(fields: [matchedVoucherLineId], references: [id])
+
+  @@index([companyId, ledgerId])
+  @@map("bank_statement_lines")
+}
+
+// ---------------------------------------------------------------
+// Parties (customers/vendors) & items
+// ---------------------------------------------------------------
+
+enum PartyType {
+  CUSTOMER
+  VENDOR
+}
+
+/// A customer or vendor. Each party owns a dedicated ledger under
+/// Sundry Debtors (customers) or Sundry Creditors (vendors), so every
+/// invoice/payment posts straight into the double-entry books.
+model Party {
+  id            String    @id @default(uuid())
+  companyId     String
+  type          PartyType
+  name          String
+  /// Optional alias / short name (e.g. "RK Traders" for "Ramakrishna Traders").
+  aliasName     String?
+  gstin         String?
+  /// First 2 digits of GSTIN — drives CGST/SGST vs IGST on invoices.
+  stateCode     String?
+  /// Full Indian state name (e.g. "Tamil Nadu"); drives stateCode + IGST/GST.
+  state         String?
+  email         String?
+  phone         String?
+  addressLine1  String?
+  addressLine2  String?
+  city          String?
+  pincode       String?
+  ledgerId      String    @unique
+  /// Per-party document type for outstanding-balance tracking. Customers:
+  /// 'invoice' | 'estimate'; vendors: 'purchase' | 'purchaseEstimate'. Null =
+  /// inherit the company default (salesPaymentLink / purchasePaymentLink). The
+  /// outstanding shown for this party is computed ONLY from this document type.
+  balanceDocType String?
+  /// Optional photo/logo of the party, stored as a data: URL (base64).
+  image         String?
+  /// Loyalty points balance (customers).
+  loyaltyPoints Int       @default(0)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  ledger            Ledger             @relation(fields: [ledgerId], references: [id])
+  invoices          Invoice[]
+  purchaseBills     PurchaseBill[]
+  notes             Note[]
+  purchaseOrders    PurchaseOrder[]
+  openingDocuments  OpeningDocument[]
+  jobWorks          JobWork[]
+  estimates         Estimate[]
+  proformaInvoices  ProformaInvoice[]
+  purchaseEstimates PurchaseEstimate[]
+  deliveryChallans  DeliveryChallan[]
+  salesOrders       SalesOrder[]
+  cheques           Cheque[]
+  loyaltyTxns       LoyaltyTxn[]
+  partyPayments     PartyPayment[]
+
+  @@unique([companyId, name])
+  @@index([companyId, type])
+  @@map("parties")
+}
+
+/// Direction of a standalone party payment.
+/// RECEIPT = money received from a customer; PAYMENT = money paid to a vendor.
+enum PartyPaymentDirection {
+  RECEIPT
+  PAYMENT
+}
+
+/// A receipt/payment recorded directly against a party's ledger — not tied to a
+/// single invoice/bill. Reduces the party's outstanding (pending) balance and,
+/// when linked to an estimate or purchase order, records an advance against it.
+/// The linked voucher (RECEIPT/PAYMENT) is the accounting source of truth.
+model PartyPayment {
+  id              String                @id @default(uuid())
+  companyId       String
+  partyId         String
+  voucherId       String                @unique
+  direction       PartyPaymentDirection
+  date            DateTime              @db.Date
+  amount          Decimal               @db.Decimal(18, 2)
+  method          PaymentMethod         @default(CASH)
+  reference       String?
+  note            String?
+  /// Optional sales estimate this payment is an advance against.
+  estimateId      String?
+  /// Optional purchase order this payment is an advance against.
+  purchaseOrderId String?
+  /// Optional purchase estimate (vendor quotation) this is an advance against.
+  purchaseEstimateId String?
+  createdAt       DateTime              @default(now())
+
+  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party            Party             @relation(fields: [partyId], references: [id])
+  voucher          Voucher           @relation(fields: [voucherId], references: [id])
+  estimate         Estimate?         @relation(fields: [estimateId], references: [id])
+  purchaseOrder    PurchaseOrder?    @relation(fields: [purchaseOrderId], references: [id])
+  purchaseEstimate PurchaseEstimate? @relation(fields: [purchaseEstimateId], references: [id])
+
+  @@index([companyId, partyId])
+  @@index([estimateId])
+  @@index([purchaseOrderId])
+  @@index([purchaseEstimateId])
+  @@map("party_payments")
+}
+
+// ---------------------------------------------------------------
+// Sales invoices & payments
+// ---------------------------------------------------------------
+
+enum InvoiceStatus {
+  ISSUED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK
+  UPI
+  CARD
+  CHEQUE
+  OTHER
+}
+
+/// A GST sales invoice. Financials are denormalized here for fast listing;
+/// the linked SALES voucher is the accounting source of truth.
+model Invoice {
+  id                    String        @id @default(uuid())
+  companyId             String
+  partyId               String
+  branchId              String?
+  voucherId             String        @unique
+  invoiceNo             Int
+  fiscalYear            String
+  date                  DateTime      @db.Date
+  dueDate               DateTime?     @db.Date
+  /// State code of the place of supply (defaults to the party's state).
+  placeOfSupply         String?
+  isInterState          Boolean
+  notes                 String?
+  subtotal              Decimal       @db.Decimal(18, 2)
+  discountTotal         Decimal       @default(0) @db.Decimal(18, 2)
+  taxableAmount         Decimal       @db.Decimal(18, 2)
+  cgstAmount            Decimal       @default(0) @db.Decimal(18, 2)
+  sgstAmount            Decimal       @default(0) @db.Decimal(18, 2)
+  igstAmount            Decimal       @default(0) @db.Decimal(18, 2)
+  roundOff              Decimal       @default(0) @db.Decimal(5, 2)
+  /// Non-taxed extra charges added after tax (freight + any other charges).
+  freightCharges        Decimal       @default(0) @db.Decimal(18, 2)
+  otherCharges          Decimal       @default(0) @db.Decimal(18, 2)
+  total                 Decimal       @db.Decimal(18, 2)
+  /// Loyalty points redeemed against this invoice and their rupee value
+  /// (a post-tax discount borne by the seller; `total` stays the gross sale).
+  loyaltyDiscount       Decimal       @default(0) @db.Decimal(18, 2)
+  loyaltyPointsRedeemed Int           @default(0)
+  status                InvoiceStatus @default(ISSUED)
+  /// Unguessable token for the public share link (WhatsApp etc); null = not shared.
+  shareToken            String?       @unique
+  /// Bank account whose details print on this invoice (else the default bank).
+  bankAccountId         String?
+  createdById           String
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  company        Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party          Party            @relation(fields: [partyId], references: [id])
+  branch         Branch?          @relation(fields: [branchId], references: [id])
+  voucher        Voucher          @relation(fields: [voucherId], references: [id])
+  bankAccount    BankAccount?     @relation(fields: [bankAccountId], references: [id])
+  lines          InvoiceLine[]
+  payments       Payment[]
+  creditNotes    Note[]
+  sourceEstimate Estimate?
+  sourceProforma ProformaInvoice?
+  sourceChallan  DeliveryChallan?
+  sourceOrder    SalesOrder?
+  eInvoice       EInvoice?
+  eWayBill       EWayBill?
+
+  @@unique([companyId, fiscalYear, invoiceNo])
+  @@index([companyId, date])
+  @@map("invoices")
+}
+
+model InvoiceLine {
+  id           String  @id @default(uuid())
+  invoiceId    String
+  itemId       String?
+  batchId      String?
+  lineNo       Int
+  description  String
+  hsnCode      String?
+  unit         String  @default("PCS")
+  quantity     Decimal @db.Decimal(18, 3)
+  rate         Decimal @db.Decimal(18, 2)
+  discountPct  Decimal @default(0) @db.Decimal(5, 2)
+  taxableValue Decimal @db.Decimal(18, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgst         Decimal @default(0) @db.Decimal(18, 2)
+  sgst         Decimal @default(0) @db.Decimal(18, 2)
+  igst         Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  invoice Invoice    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  item    Item?      @relation(fields: [itemId], references: [id])
+  batch   ItemBatch? @relation(fields: [batchId], references: [id])
+
+  @@index([invoiceId])
+  @@map("invoice_lines")
+}
+
+/// A receipt against an invoice; posts a RECEIPT voucher (Dr cash/bank, Cr party).
+model Payment {
+  id        String        @id @default(uuid())
+  companyId String
+  invoiceId String
+  voucherId String        @unique
+  date      DateTime      @db.Date
+  amount    Decimal       @db.Decimal(18, 2)
+  method    PaymentMethod @default(CASH)
+  reference String?
+  createdAt DateTime      @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  invoice Invoice @relation(fields: [invoiceId], references: [id])
+  voucher Voucher @relation(fields: [voucherId], references: [id])
+
+  @@index([companyId])
+  @@index([invoiceId])
+  @@map("payments")
+}
+
+model InvoiceCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("invoice_counters")
+}
+
+// ---------------------------------------------------------------
+// Purchase orders + GRN (logistics documents — no accounting entries;
+// the linked purchase bill posts financials & stock)
+// ---------------------------------------------------------------
+
+enum PoStatus {
+  OPEN
+  PARTIAL
+  RECEIVED
+  CLOSED
+  CANCELLED
+}
+
+model PurchaseOrder {
+  id           String    @id @default(uuid())
+  companyId    String
+  partyId      String
+  branchId     String?
+  poNo         Int
+  fiscalYear   String
+  date         DateTime  @db.Date
+  expectedDate DateTime? @db.Date
+  notes        String?
+  status       PoStatus  @default(OPEN)
+  createdById  String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  company Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party   Party               @relation(fields: [partyId], references: [id])
+  branch  Branch?             @relation(fields: [branchId], references: [id])
+  lines   PurchaseOrderLine[]
+  grns    Grn[]
+  payments PartyPayment[]
+
+  @@unique([companyId, fiscalYear, poNo])
+  @@index([companyId, date])
+  @@map("purchase_orders")
+}
+
+model PurchaseOrderLine {
+  id          String  @id @default(uuid())
+  poId        String
+  itemId      String?
+  lineNo      Int
+  description String
+  unit        String  @default("PCS")
+  quantity    Decimal @db.Decimal(18, 3)
+  rate        Decimal @db.Decimal(18, 2)
+  receivedQty Decimal @default(0) @db.Decimal(18, 3)
+
+  po       PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  item     Item?         @relation(fields: [itemId], references: [id])
+  grnLines GrnLine[]
+
+  @@index([poId])
+  @@map("purchase_order_lines")
+}
+
+/// Goods Receipt Note — records physical delivery against a PO.
+model Grn {
+  id          String   @id @default(uuid())
+  companyId   String
+  poId        String
+  grnNo       Int
+  fiscalYear  String
+  date        DateTime @db.Date
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  po      PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  lines   GrnLine[]
+
+  @@unique([companyId, fiscalYear, grnNo])
+  @@index([companyId])
+  @@map("grns")
+}
+
+model GrnLine {
+  id       String  @id @default(uuid())
+  grnId    String
+  poLineId String
+  quantity Decimal @db.Decimal(18, 3)
+
+  grn    Grn               @relation(fields: [grnId], references: [id], onDelete: Cascade)
+  poLine PurchaseOrderLine @relation(fields: [poLineId], references: [id])
+
+  @@index([grnId])
+  @@map("grn_lines")
+}
+
+model PoCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("po_counters")
+}
+
+model GrnCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("grn_counters")
+}
+
+// ---------------------------------------------------------------
+// Credit / debit notes (sales & purchase returns — GSTR-1 table 9B)
+// ---------------------------------------------------------------
+
+enum NoteType {
+  CREDIT_NOTE
+  DEBIT_NOTE
+}
+
+/// CREDIT_NOTE reverses (part of) a sales invoice — goods returned or
+/// post-sale discount. DEBIT_NOTE reverses (part of) a purchase bill.
+model Note {
+  id             String        @id @default(uuid())
+  companyId      String
+  type           NoteType
+  noteNo         Int
+  fiscalYear     String
+  partyId        String
+  /// Source document: exactly one of these is set, matching `type`.
+  invoiceId      String?
+  purchaseBillId String?
+  voucherId      String        @unique
+  date           DateTime      @db.Date
+  reason         String?
+  isInterState   Boolean
+  taxableAmount  Decimal       @db.Decimal(18, 2)
+  cgstAmount     Decimal       @default(0) @db.Decimal(18, 2)
+  sgstAmount     Decimal       @default(0) @db.Decimal(18, 2)
+  igstAmount     Decimal       @default(0) @db.Decimal(18, 2)
+  roundOff       Decimal       @default(0) @db.Decimal(5, 2)
+  freightCharges Decimal       @default(0) @db.Decimal(18, 2)
+  otherCharges   Decimal       @default(0) @db.Decimal(18, 2)
+  total          Decimal       @db.Decimal(18, 2)
+  status         InvoiceStatus @default(ISSUED)
+  createdById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party        Party         @relation(fields: [partyId], references: [id])
+  invoice      Invoice?      @relation(fields: [invoiceId], references: [id])
+  purchaseBill PurchaseBill? @relation(fields: [purchaseBillId], references: [id])
+  voucher      Voucher       @relation(fields: [voucherId], references: [id])
+  lines        NoteLine[]
+
+  @@unique([companyId, type, fiscalYear, noteNo])
+  @@index([companyId, date])
+  @@map("notes")
+}
+
+model NoteLine {
+  id           String  @id @default(uuid())
+  noteId       String
+  itemId       String?
+  batchId      String?
+  lineNo       Int
+  description  String
+  hsnCode      String?
+  unit         String  @default("PCS")
+  quantity     Decimal @db.Decimal(18, 3)
+  rate         Decimal @db.Decimal(18, 2)
+  taxableValue Decimal @db.Decimal(18, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgst         Decimal @default(0) @db.Decimal(18, 2)
+  sgst         Decimal @default(0) @db.Decimal(18, 2)
+  igst         Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  note  Note       @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  item  Item?      @relation(fields: [itemId], references: [id])
+  batch ItemBatch? @relation(fields: [batchId], references: [id])
+
+  @@index([noteId])
+  @@map("note_lines")
+}
+
+model NoteCounter {
+  companyId  String
+  type       NoteType
+  fiscalYear String
+  nextNo     Int      @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, type, fiscalYear])
+  @@map("note_counters")
+}
+
+// ---------------------------------------------------------------
+// Purchase bills (mirror of sales invoices, with GST Input credit)
+// ---------------------------------------------------------------
+
+model PurchaseBill {
+  id             String        @id @default(uuid())
+  companyId      String
+  partyId        String
+  branchId       String?
+  voucherId      String        @unique
+  billNo         Int
+  fiscalYear     String
+  /// The vendor's own invoice/bill number, for reconciliation.
+  supplierBillNo String?
+  date           DateTime      @db.Date
+  dueDate        DateTime?     @db.Date
+  isInterState   Boolean
+  notes          String?
+  subtotal       Decimal       @db.Decimal(18, 2)
+  discountTotal  Decimal       @default(0) @db.Decimal(18, 2)
+  taxableAmount  Decimal       @db.Decimal(18, 2)
+  cgstAmount     Decimal       @default(0) @db.Decimal(18, 2)
+  sgstAmount     Decimal       @default(0) @db.Decimal(18, 2)
+  igstAmount     Decimal       @default(0) @db.Decimal(18, 2)
+  roundOff       Decimal       @default(0) @db.Decimal(5, 2)
+  freightCharges Decimal       @default(0) @db.Decimal(18, 2)
+  otherCharges   Decimal       @default(0) @db.Decimal(18, 2)
+  total          Decimal       @db.Decimal(18, 2)
+  status         InvoiceStatus @default(ISSUED)
+  createdById    String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  company        Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party          Party              @relation(fields: [partyId], references: [id])
+  branch         Branch?            @relation(fields: [branchId], references: [id])
+  voucher        Voucher            @relation(fields: [voucherId], references: [id])
+  lines          PurchaseBillLine[]
+  payments       BillPayment[]
+  debitNotes     Note[]
+  sourceEstimate PurchaseEstimate?
+
+  @@unique([companyId, fiscalYear, billNo])
+  @@index([companyId, date])
+  @@map("purchase_bills")
+}
+
+model PurchaseBillLine {
+  id           String  @id @default(uuid())
+  billId       String
+  itemId       String?
+  batchId      String?
+  lineNo       Int
+  description  String
+  hsnCode      String?
+  unit         String  @default("PCS")
+  quantity     Decimal @db.Decimal(18, 3)
+  rate         Decimal @db.Decimal(18, 2)
+  discountPct  Decimal @default(0) @db.Decimal(5, 2)
+  taxableValue Decimal @db.Decimal(18, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgst         Decimal @default(0) @db.Decimal(18, 2)
+  sgst         Decimal @default(0) @db.Decimal(18, 2)
+  igst         Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  bill  PurchaseBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+  item  Item?        @relation(fields: [itemId], references: [id])
+  batch ItemBatch?   @relation(fields: [batchId], references: [id])
+
+  @@index([billId])
+  @@map("purchase_bill_lines")
+}
+
+/// A payment made to a vendor against a bill (Dr vendor, Cr cash/bank).
+model BillPayment {
+  id        String        @id @default(uuid())
+  companyId String
+  billId    String
+  voucherId String        @unique
+  date      DateTime      @db.Date
+  amount    Decimal       @db.Decimal(18, 2)
+  method    PaymentMethod @default(CASH)
+  reference String?
+  createdAt DateTime      @default(now())
+
+  company Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bill    PurchaseBill @relation(fields: [billId], references: [id])
+  voucher Voucher      @relation(fields: [voucherId], references: [id])
+
+  @@index([companyId])
+  @@index([billId])
+  @@map("bill_payments")
+}
+
+model PurchaseBillCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("purchase_bill_counters")
+}
+
+model Item {
+  id            String   @id @default(uuid())
+  companyId     String
+  name          String
+  sku           String?
+  hsnCode       String?
+  unit          String   @default("PCS")
+  /// GST rate percentage: 0, 0.25, 3, 5, 12, 18, 28
+  gstRate       Decimal  @default(0) @db.Decimal(5, 2)
+  salePrice     Decimal? @db.Decimal(18, 2)
+  purchasePrice Decimal? @db.Decimal(18, 2)
+  openingStock  Decimal  @default(0) @db.Decimal(18, 3)
+  /// Low-stock alert threshold; null disables the alert.
+  reorderLevel  Decimal? @db.Decimal(18, 3)
+  /// EAN/UPC or internal barcode — USB scanners type this into search boxes.
+  barcode       String?
+  /// When true, purchase lines must name a batch and sales consume from one.
+  trackBatches  Boolean  @default(false)
+  /// User-defined attributes: an ordered array of { name, value } pairs the
+  /// business names itself (replaces the old fixed textile columns).
+  customFields  Json?
+  description   String?
+  /// Variant support: a child variant points to its parent item and carries a
+  /// label (e.g. "Red / M"). Parent items just have `variants`. Each variant is
+  /// a full item, so it reuses stock/pricing/batch tracking as-is.
+  parentItemId  String?
+  variantLabel  String?
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parent                Item?                  @relation("ItemVariants", fields: [parentItemId], references: [id])
+  variants              Item[]                 @relation("ItemVariants")
+  invoiceLines          InvoiceLine[]
+  transferLines         StockTransferLine[]
+  purchaseLines         PurchaseBillLine[]
+  noteLines             NoteLine[]
+  poLines               PurchaseOrderLine[]
+  batches               ItemBatch[]
+  jobWorkIssues         JobWorkIssueLine[]     @relation("JobWorkIssues")
+  jobWorkReceipts       JobWorkReceiptLine[]   @relation("JobWorkReceipts")
+  estimateLines         EstimateLine[]
+  proformaInvoiceLines  ProformaInvoiceLine[]
+  purchaseEstimateLines PurchaseEstimateLine[]
+  deliveryChallanLines  DeliveryChallanLine[]
+  salesOrderLines       SalesOrderLine[]
+
+  @@unique([companyId, name])
+  @@unique([companyId, barcode])
+  @@index([companyId])
+  @@map("items")
+}
+
+/// A manufacturing/purchase batch (lot) of an item, with optional expiry.
+model ItemBatch {
+  id         String    @id @default(uuid())
+  companyId  String
+  itemId     String
+  batchNo    String
+  expiryDate DateTime? @db.Date
+  createdAt  DateTime  @default(now())
+
+  company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  item          Item                @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  invoiceLines  InvoiceLine[]
+  purchaseLines PurchaseBillLine[]
+  noteLines     NoteLine[]
+  transferLines StockTransferLine[]
+
+  @@unique([itemId, batchNo])
+  @@index([companyId])
+  @@map("item_batches")
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  ACCOUNTANT
+  CASHIER
+  EMPLOYEE
+  AUDITOR
+  BRANCH_MANAGER
+}
+
+model CompanyUser {
+  id        String   @id @default(uuid())
+  userId    String
+  companyId String
+  role      Role
+  /// Home branch — set for BRANCH_MANAGER to scope their access.
+  branchId  String?
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch  Branch? @relation(fields: [branchId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, companyId])
+  @@index([companyId])
+  @@map("company_users")
+}
+
+model StockTransfer {
+  id           String        @id @default(uuid())
+  companyId    String
+  transferNo   Int
+  fiscalYear   String
+  date         DateTime      @db.Date
+  /// null = Head Office / unassigned pool
+  fromBranchId String?
+  toBranchId   String?
+  narration    String?
+  status       InvoiceStatus @default(ISSUED)
+  createdById  String
+  createdAt    DateTime      @default(now())
+
+  company    Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromBranch Branch?             @relation("TransferFrom", fields: [fromBranchId], references: [id], onDelete: SetNull)
+  toBranch   Branch?             @relation("TransferTo", fields: [toBranchId], references: [id], onDelete: SetNull)
+  lines      StockTransferLine[]
+
+  @@unique([companyId, fiscalYear, transferNo])
+  @@index([companyId])
+  @@map("stock_transfers")
+}
+
+model StockTransferLine {
+  id         String  @id @default(uuid())
+  transferId String
+  lineNo     Int
+  itemId     String
+  batchId    String?
+  quantity   Decimal @db.Decimal(12, 3)
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  item     Item          @relation(fields: [itemId], references: [id])
+  batch    ItemBatch?    @relation(fields: [batchId], references: [id])
+
+  @@index([transferId])
+  @@map("stock_transfer_lines")
+}
+
+model StockTransferCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("stock_transfer_counters")
+}
+
+enum PayRunStatus {
+  DRAFT
+  POSTED
+  PAID
+  CANCELLED
+}
+
+model Employee {
+  id            String    @id @default(uuid())
+  companyId     String
+  branchId      String?
+  code          String
+  name          String
+  designation   String?
+  email         String?
+  /// Portal login: matched to a User by email (auto-linked at registration).
+  userId        String?
+  phone         String?
+  joinDate      DateTime  @db.Date
+  exitDate      DateTime? @db.Date
+  pan           String?
+  uan           String?
+  esiNo         String?
+  bankName      String?
+  bankAccountNo String?
+  bankIfsc      String?
+
+  /// Monthly salary structure (rupees).
+  basic           Decimal @db.Decimal(18, 2)
+  hra             Decimal @default(0) @db.Decimal(18, 2)
+  conveyance      Decimal @default(0) @db.Decimal(18, 2)
+  otherAllowances Decimal @default(0) @db.Decimal(18, 2)
+  pfEnabled       Boolean @default(true)
+  esiEnabled      Boolean @default(true)
+  /// Professional tax per month (state slab, e.g. TN ~208/mo averaged).
+  ptMonthly       Decimal @default(0) @db.Decimal(18, 2)
+  /// Income-tax TDS per month (computed outside, entered here).
+  tdsMonthly      Decimal @default(0) @db.Decimal(18, 2)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  company  Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch   Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  payslips PayRunLine[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("employees")
+}
+
+model PayRun {
+  id               String       @id @default(uuid())
+  companyId        String
+  year             Int
+  /// 1-12
+  month            Int
+  status           PayRunStatus @default(DRAFT)
+  /// JOURNAL voucher booked on POST.
+  voucherId        String?      @unique
+  /// PAYMENT voucher booked on PAY.
+  paymentVoucherId String?      @unique
+  narration        String?
+  createdById      String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  voucher        Voucher?     @relation("PayRunVoucher", fields: [voucherId], references: [id])
+  paymentVoucher Voucher?     @relation("PayRunPaymentVoucher", fields: [paymentVoucherId], references: [id])
+  lines          PayRunLine[]
+
+  @@index([companyId, year, month])
+  @@map("pay_runs")
+}
+
+model PayRunLine {
+  id          String  @id @default(uuid())
+  payRunId    String
+  employeeId  String
+  workingDays Decimal @db.Decimal(5, 2)
+  lopDays     Decimal @default(0) @db.Decimal(5, 2)
+
+  basic           Decimal @db.Decimal(18, 2)
+  hra             Decimal @db.Decimal(18, 2)
+  conveyance      Decimal @db.Decimal(18, 2)
+  otherAllowances Decimal @db.Decimal(18, 2)
+  gross           Decimal @db.Decimal(18, 2)
+
+  pfEmployee      Decimal @db.Decimal(18, 2)
+  pfEmployer      Decimal @db.Decimal(18, 2)
+  esiEmployee     Decimal @db.Decimal(18, 2)
+  esiEmployer     Decimal @db.Decimal(18, 2)
+  pt              Decimal @db.Decimal(18, 2)
+  tds             Decimal @db.Decimal(18, 2)
+  totalDeductions Decimal @db.Decimal(18, 2)
+  netPay          Decimal @db.Decimal(18, 2)
+
+  payRun   PayRun   @relation(fields: [payRunId], references: [id], onDelete: Cascade)
+  employee Employee @relation(fields: [employeeId], references: [id])
+
+  @@unique([payRunId, employeeId])
+  @@map("pay_run_lines")
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+model Plan {
+  id           String   @id @default(uuid())
+  code         String   @unique
+  name         String
+  /// Display price (₹/month). Billing is handled outside the app for now.
+  priceMonthly Decimal  @default(0) @db.Decimal(18, 2)
+  /// -1 = unlimited.
+  maxCompanies Int      @default(1)
+  /// Branches per company. -1 = unlimited.
+  maxBranches  Int      @default(-1)
+  /// Members (incl. owner) per company. -1 = unlimited.
+  maxMembers   Int      @default(-1)
+  /// Default trial length when this plan is granted as a trial.
+  trialDays    Int      @default(0)
+  /// Feature switches, e.g. {"payroll": true}.
+  features     Json     @default("{}")
+  isActive     Boolean  @default(true)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subscriptions UserSubscription[]
+  paymentOrders PaymentOrder[]
+
+  @@map("plans")
+}
+
+model UserSubscription {
+  id        String             @id @default(uuid())
+  userId    String             @unique
+  planId    String
+  status    SubscriptionStatus @default(TRIAL)
+  startsAt  DateTime           @default(now())
+  /// null = no expiry (e.g. a manually-activated unlimited plan).
+  expiresAt DateTime?
+  /// Free-text admin notes (payment refs, agreements…).
+  notes     String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan Plan @relation(fields: [planId], references: [id])
+
+  @@index([planId])
+  @@map("user_subscriptions")
+}
+
+// ---------------------------------------------------------------
+// Opening documents (migration carry-over)
+// ---------------------------------------------------------------
+
+enum OpeningDocKind {
+  RECEIVABLE
+  PAYABLE
+}
+
+/// A bill-wise opening balance brought over from the previous system.
+/// Tracking only: the money side already sits in the party ledger's opening
+/// balance, so these never post sales/purchase/GST. Settling one records a
+/// real receipt/payment voucher and bumps `settled`.
+model OpeningDocument {
+  id        String         @id @default(uuid())
+  companyId String
+  partyId   String
+  kind      OpeningDocKind
+  refNo     String
+  date      DateTime       @db.Date
+  dueDate   DateTime?      @db.Date
+  amount    Decimal        @db.Decimal(18, 2)
+  settled   Decimal        @default(0) @db.Decimal(18, 2)
+  notes     String?
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party   Party   @relation(fields: [partyId], references: [id])
+
+  @@unique([companyId, partyId, kind, refNo])
+  @@index([companyId, kind])
+  @@map("opening_documents")
+}
+
+// ---------------------------------------------------------------
+// Plan payments (Razorpay)
+// ---------------------------------------------------------------
+
+enum PaymentOrderStatus {
+  CREATED
+  PAID
+  FAILED
+}
+
+/// One checkout attempt for a plan purchase/renewal. Amounts in PAISE.
+model PaymentOrder {
+  id                String             @id @default(uuid())
+  userId            String
+  planId            String
+  months            Int
+  amountPaise       Int
+  currency          String             @default("INR")
+  razorpayOrderId   String             @unique
+  razorpayPaymentId String?
+  status            PaymentOrderStatus @default(CREATED)
+  /// Referral code applied at checkout + the rupee-paise it knocked off.
+  referralCodeId    String?
+  discountPaise     Int                @default(0)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  plan         Plan          @relation(fields: [planId], references: [id])
+  referralCode ReferralCode? @relation(fields: [referralCodeId], references: [id])
+
+  @@index([userId])
+  @@map("payment_orders")
+}
+
+/// How a referral code discounts a plan purchase.
+enum ReferralDiscountType {
+  PERCENT
+  FLAT
+}
+
+/// Admin-created promo/referral code applied at plan checkout. Reusable up to
+/// an optional max-uses, with an optional expiry.
+model ReferralCode {
+  id            String               @id @default(uuid())
+  code          String               @unique
+  description   String?
+  discountType  ReferralDiscountType @default(PERCENT)
+  /// PERCENT: 0-100 (% off); FLAT: rupees off.
+  discountValue Decimal              @db.Decimal(10, 2)
+  /// Optional cap on successful redemptions; null = unlimited.
+  maxUses       Int?
+  /// Successful (paid) redemptions so far.
+  usesCount     Int                  @default(0)
+  expiresAt     DateTime?
+  isActive      Boolean              @default(true)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  orders PaymentOrder[]
+
+  @@map("referral_codes")
+}
+
+// ---------------------------------------------------------------
+// Audit trail
+// ---------------------------------------------------------------
+
+/// One mutating API call. Deliberately NO foreign keys — the trail must
+/// survive user/company deletion — and NO request bodies (secrets).
+model AuditLog {
+  id        String   @id @default(uuid())
+  companyId String?
+  userId    String?
+  userEmail String?
+  method    String
+  /// Path with uuids collapsed, e.g. companies/:id/vouchers
+  action    String
+  /// The literal path for drill-down.
+  path      String
+  status    Int
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([companyId, createdAt])
+  @@map("audit_logs")
+}
+
+// ---------------------------------------------------------------
+// Job work (textile: dyeing, printing, stitching sent to outside units)
+// ---------------------------------------------------------------
+
+enum JobWorkProcess {
+  DYEING
+  PRINTING
+  WEAVING
+  KNITTING
+  STITCHING
+  WASHING
+  OTHER
+}
+
+enum JobWorkStatus {
+  OPEN
+  PARTIAL
+  CLOSED
+  CANCELLED
+}
+
+/// Material sent to an outside job worker and what came back. Issued raw
+/// material leaves on-hand stock (it is off-premises); receipts add the
+/// finished item back; wastage is recorded but never re-enters stock.
+model JobWork {
+  id          String         @id @default(uuid())
+  companyId   String
+  jobNo       Int
+  fiscalYear  String
+  partyId     String
+  process     JobWorkProcess
+  status      JobWorkStatus  @default(OPEN)
+  issueDate   DateTime       @db.Date
+  dueDate     DateTime?      @db.Date
+  notes       String?
+  createdById String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  company  Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party    Party                @relation(fields: [partyId], references: [id])
+  issues   JobWorkIssueLine[]
+  receipts JobWorkReceiptLine[]
+
+  @@unique([companyId, fiscalYear, jobNo])
+  @@index([companyId, status])
+  @@map("job_works")
+}
+
+model JobWorkIssueLine {
+  id        String  @id @default(uuid())
+  jobWorkId String
+  lineNo    Int
+  itemId    String
+  quantity  Decimal @db.Decimal(18, 3)
+
+  jobWork JobWork @relation(fields: [jobWorkId], references: [id], onDelete: Cascade)
+  item    Item    @relation("JobWorkIssues", fields: [itemId], references: [id])
+
+  @@map("job_work_issue_lines")
+}
+
+model JobWorkReceiptLine {
+  id         String   @id @default(uuid())
+  jobWorkId  String
+  date       DateTime @db.Date
+  itemId     String
+  quantity   Decimal  @db.Decimal(18, 3)
+  wastageQty Decimal  @default(0) @db.Decimal(18, 3)
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  jobWork JobWork @relation(fields: [jobWorkId], references: [id], onDelete: Cascade)
+  item    Item    @relation("JobWorkReceipts", fields: [itemId], references: [id])
+
+  @@map("job_work_receipt_lines")
+}
+
+model JobWorkCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("job_work_counters")
+}
+
+// ---------------------------------------------------------------
+// Estimates / Quotations — pre-sale offers. NOT accounting documents:
+// no voucher, no GST liability, no stock movement until converted to an
+// invoice (which posts the SALES voucher and links back here).
+// ---------------------------------------------------------------
+
+enum EstimateStatus {
+  OPEN
+  ACCEPTED
+  DECLINED
+  CONVERTED
+  CANCELLED
+}
+
+model Estimate {
+  id            String         @id @default(uuid())
+  companyId     String
+  partyId       String
+  branchId      String?
+  estimateNo    Int
+  fiscalYear    String
+  date          DateTime       @db.Date
+  validUntil    DateTime?      @db.Date
+  placeOfSupply String?
+  isInterState  Boolean
+  notes         String?
+  /// Whether to print the company name in the document header.
+  showCompanyName Boolean      @default(true)
+  subtotal      Decimal        @db.Decimal(18, 2)
+  discountTotal Decimal        @default(0) @db.Decimal(18, 2)
+  taxableAmount Decimal        @db.Decimal(18, 2)
+  cgstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  sgstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  igstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  roundOff      Decimal        @default(0) @db.Decimal(5, 2)
+  freightCharges Decimal       @default(0) @db.Decimal(18, 2)
+  otherCharges  Decimal        @default(0) @db.Decimal(18, 2)
+  total         Decimal        @db.Decimal(18, 2)
+  status        EstimateStatus @default(OPEN)
+  /// The invoice this estimate was converted into (one-to-one).
+  invoiceId     String?        @unique
+  /// Receivable voucher when the estimate is booked as a bill (estimate-link
+  /// mode). Null for plain quotation estimates.
+  voucherId     String?        @unique
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  company Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party   Party          @relation(fields: [partyId], references: [id])
+  branch  Branch?        @relation(fields: [branchId], references: [id])
+  invoice Invoice?       @relation(fields: [invoiceId], references: [id])
+  voucher Voucher?       @relation(fields: [voucherId], references: [id])
+  lines   EstimateLine[]
+  payments PartyPayment[]
+
+  @@unique([companyId, fiscalYear, estimateNo])
+  @@index([companyId, date])
+  @@map("estimates")
+}
+
+model EstimateLine {
+  id           String  @id @default(uuid())
+  estimateId   String
+  itemId       String?
+  lineNo       Int
+  description  String
+  hsnCode      String?
+  unit         String  @default("PCS")
+  quantity     Decimal @db.Decimal(18, 3)
+  rate         Decimal @db.Decimal(18, 2)
+  discountPct  Decimal @default(0) @db.Decimal(5, 2)
+  taxableValue Decimal @db.Decimal(18, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgst         Decimal @default(0) @db.Decimal(18, 2)
+  sgst         Decimal @default(0) @db.Decimal(18, 2)
+  igst         Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  estimate Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  item     Item?    @relation(fields: [itemId], references: [id])
+
+  @@index([estimateId])
+  @@map("estimate_lines")
+}
+
+model EstimateCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("estimate_counters")
+}
+
+// ---------------------------------------------------------------
+// Proforma invoices — a preliminary bill issued before the sale is
+// finalised. NOT an accounting document until converted to a tax
+// invoice. Mirrors Estimate; reuses EstimateStatus.
+// ---------------------------------------------------------------
+
+model ProformaInvoice {
+  id            String         @id @default(uuid())
+  companyId     String
+  partyId       String
+  branchId      String?
+  proformaNo    Int
+  fiscalYear    String
+  date          DateTime       @db.Date
+  validUntil    DateTime?      @db.Date
+  placeOfSupply String?
+  isInterState  Boolean
+  notes         String?
+  subtotal      Decimal        @db.Decimal(18, 2)
+  discountTotal Decimal        @default(0) @db.Decimal(18, 2)
+  taxableAmount Decimal        @db.Decimal(18, 2)
+  cgstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  sgstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  igstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  roundOff      Decimal        @default(0) @db.Decimal(5, 2)
+  freightCharges Decimal       @default(0) @db.Decimal(18, 2)
+  otherCharges  Decimal        @default(0) @db.Decimal(18, 2)
+  total         Decimal        @db.Decimal(18, 2)
+  status        EstimateStatus @default(OPEN)
+  /// The invoice this proforma was converted into (one-to-one).
+  invoiceId     String?        @unique
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  company Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party   Party                 @relation(fields: [partyId], references: [id])
+  branch  Branch?               @relation(fields: [branchId], references: [id])
+  invoice Invoice?              @relation(fields: [invoiceId], references: [id])
+  lines   ProformaInvoiceLine[]
+
+  @@unique([companyId, fiscalYear, proformaNo])
+  @@index([companyId, date])
+  @@map("proforma_invoices")
+}
+
+model ProformaInvoiceLine {
+  id           String  @id @default(uuid())
+  proformaId   String
+  itemId       String?
+  lineNo       Int
+  description  String
+  hsnCode      String?
+  unit         String  @default("PCS")
+  quantity     Decimal @db.Decimal(18, 3)
+  rate         Decimal @db.Decimal(18, 2)
+  discountPct  Decimal @default(0) @db.Decimal(5, 2)
+  taxableValue Decimal @db.Decimal(18, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgst         Decimal @default(0) @db.Decimal(18, 2)
+  sgst         Decimal @default(0) @db.Decimal(18, 2)
+  igst         Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  proforma ProformaInvoice @relation(fields: [proformaId], references: [id], onDelete: Cascade)
+  item     Item?           @relation(fields: [itemId], references: [id])
+
+  @@index([proformaId])
+  @@map("proforma_invoice_lines")
+}
+
+model ProformaInvoiceCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("proforma_invoice_counters")
+}
+
+// ---------------------------------------------------------------
+// Delivery challans — goods dispatched without (yet) a tax invoice.
+// NOT an accounting document until converted to an invoice (which
+// posts the SALES voucher, output GST and stock). Reuses EstimateStatus
+// (OPEN / CONVERTED / CANCELLED; ACCEPTED/DECLINED unused).
+// ---------------------------------------------------------------
+
+model DeliveryChallan {
+  id            String         @id @default(uuid())
+  companyId     String
+  partyId       String
+  branchId      String?
+  challanNo     Int
+  fiscalYear    String
+  date          DateTime       @db.Date
+  placeOfSupply String?
+  isInterState  Boolean
+  /// Optional transport details printed on the challan.
+  vehicleNo     String?
+  notes         String?
+  subtotal      Decimal        @db.Decimal(18, 2)
+  discountTotal Decimal        @default(0) @db.Decimal(18, 2)
+  taxableAmount Decimal        @db.Decimal(18, 2)
+  cgstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  sgstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  igstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  roundOff      Decimal        @default(0) @db.Decimal(5, 2)
+  freightCharges Decimal       @default(0) @db.Decimal(18, 2)
+  otherCharges  Decimal        @default(0) @db.Decimal(18, 2)
+  total         Decimal        @db.Decimal(18, 2)
+  status        EstimateStatus @default(OPEN)
+  /// The invoice this challan was billed into (one-to-one).
+  invoiceId     String?        @unique
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  company Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party   Party                 @relation(fields: [partyId], references: [id])
+  branch  Branch?               @relation(fields: [branchId], references: [id])
+  invoice Invoice?              @relation(fields: [invoiceId], references: [id])
+  lines   DeliveryChallanLine[]
+
+  @@unique([companyId, fiscalYear, challanNo])
+  @@index([companyId, date])
+  @@map("delivery_challans")
+}
+
+model DeliveryChallanLine {
+  id           String  @id @default(uuid())
+  challanId    String
+  itemId       String?
+  lineNo       Int
+  description  String
+  hsnCode      String?
+  unit         String  @default("PCS")
+  quantity     Decimal @db.Decimal(18, 3)
+  rate         Decimal @db.Decimal(18, 2)
+  discountPct  Decimal @default(0) @db.Decimal(5, 2)
+  taxableValue Decimal @db.Decimal(18, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgst         Decimal @default(0) @db.Decimal(18, 2)
+  sgst         Decimal @default(0) @db.Decimal(18, 2)
+  igst         Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  challan DeliveryChallan @relation(fields: [challanId], references: [id], onDelete: Cascade)
+  item    Item?           @relation(fields: [itemId], references: [id])
+
+  @@index([challanId])
+  @@map("delivery_challan_lines")
+}
+
+model DeliveryChallanCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("delivery_challan_counters")
+}
+
+// ---------------------------------------------------------------
+// Sales orders — confirmed customer orders, the sell-side mirror of
+// purchase orders. NOT an accounting document until converted to an
+// invoice (which posts the SALES voucher, output GST and stock).
+// Reuses EstimateStatus (OPEN / CONVERTED / CANCELLED).
+// ---------------------------------------------------------------
+
+model SalesOrder {
+  id            String         @id @default(uuid())
+  companyId     String
+  partyId       String
+  branchId      String?
+  orderNo       Int
+  fiscalYear    String
+  date          DateTime       @db.Date
+  expectedDate  DateTime?      @db.Date
+  placeOfSupply String?
+  isInterState  Boolean
+  notes         String?
+  subtotal      Decimal        @db.Decimal(18, 2)
+  discountTotal Decimal        @default(0) @db.Decimal(18, 2)
+  taxableAmount Decimal        @db.Decimal(18, 2)
+  cgstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  sgstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  igstAmount    Decimal        @default(0) @db.Decimal(18, 2)
+  roundOff      Decimal        @default(0) @db.Decimal(5, 2)
+  freightCharges Decimal       @default(0) @db.Decimal(18, 2)
+  otherCharges  Decimal        @default(0) @db.Decimal(18, 2)
+  total         Decimal        @db.Decimal(18, 2)
+  status        EstimateStatus @default(OPEN)
+  /// The invoice this order was billed into (one-to-one).
+  invoiceId     String?        @unique
+  createdById   String
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  company Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party   Party            @relation(fields: [partyId], references: [id])
+  branch  Branch?          @relation(fields: [branchId], references: [id])
+  invoice Invoice?         @relation(fields: [invoiceId], references: [id])
+  lines   SalesOrderLine[]
+
+  @@unique([companyId, fiscalYear, orderNo])
+  @@index([companyId, date])
+  @@map("sales_orders")
+}
+
+model SalesOrderLine {
+  id           String  @id @default(uuid())
+  orderId      String
+  itemId       String?
+  lineNo       Int
+  description  String
+  hsnCode      String?
+  unit         String  @default("PCS")
+  quantity     Decimal @db.Decimal(18, 3)
+  rate         Decimal @db.Decimal(18, 2)
+  discountPct  Decimal @default(0) @db.Decimal(5, 2)
+  taxableValue Decimal @db.Decimal(18, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgst         Decimal @default(0) @db.Decimal(18, 2)
+  sgst         Decimal @default(0) @db.Decimal(18, 2)
+  igst         Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  order SalesOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item  Item?      @relation(fields: [itemId], references: [id])
+
+  @@index([orderId])
+  @@map("sales_order_lines")
+}
+
+model SalesOrderCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("sales_order_counters")
+}
+
+// ---------------------------------------------------------------
+// E-Invoice (GST IRP registration). One per invoice. Holds the IRN,
+// acknowledgement and the signed QR returned by the Invoice Registration
+// Portal (real GSP/IRP in production; a sandbox simulator otherwise).
+// ---------------------------------------------------------------
+
+enum EInvoiceStatus {
+  GENERATED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------
+// E-Way Bill (GST goods-movement permit, required > Rs 50,000).
+// Generated against an invoice with transport details. Real GSP/IRP in
+// production; sandbox simulator otherwise. One per invoice.
+// ---------------------------------------------------------------
+
+enum EWayBillStatus {
+  GENERATED
+  CANCELLED
+}
+
+// ---------------------------------------------------------------
+// Cheque register — tracks cheques received (from customers) and issued
+// (to vendors) through their lifecycle. A tracking tool, not a posting
+// document; the actual money movement is recorded via the payment flow.
+// ---------------------------------------------------------------
+
+// ---------------------------------------------------------------
+// Loyalty points ledger — one row per earn/redeem/adjust event.
+// Party.loyaltyPoints holds the running balance; balanceAfter is the
+// snapshot at the time of the event.
+// ---------------------------------------------------------------
+
+enum LoyaltyTxnType {
+  EARN
+  REDEEM
+  ADJUST
+}
+
+model LoyaltyTxn {
+  id           String         @id @default(uuid())
+  companyId    String
+  partyId      String
+  type         LoyaltyTxnType
+  /// Signed point change (+earn, -redeem).
+  points       Int
+  balanceAfter Int
+  /// e.g. the invoice number that earned the points.
+  reference    String?
+  note         String?
+  createdById  String
+  createdAt    DateTime       @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party   Party   @relation(fields: [partyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, partyId])
+  @@map("loyalty_txns")
+}
+
+enum ChequeDirection {
+  RECEIVED
+  ISSUED
+}
+
+enum ChequeStatus {
+  PENDING
+  CLEARED
+  BOUNCED
+  CANCELLED
+}
+
+model Cheque {
+  id          String          @id @default(uuid())
+  companyId   String
+  branchId    String?
+  partyId     String?
+  /// Free-text name when no party is linked.
+  partyName   String?
+  direction   ChequeDirection
+  chequeNo    String
+  bankName    String?
+  amount      Decimal         @db.Decimal(18, 2)
+  /// Date on the cheque (when it's expected to clear).
+  chequeDate  DateTime        @db.Date
+  status      ChequeStatus    @default(PENDING)
+  clearedDate DateTime?       @db.Date
+  notes       String?
+  createdById String
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party   Party?  @relation(fields: [partyId], references: [id])
+  branch  Branch? @relation(fields: [branchId], references: [id])
+
+  @@index([companyId, status])
+  @@index([companyId, chequeDate])
+  @@map("cheques")
+}
+
+model EWayBill {
+  id               String         @id @default(uuid())
+  invoiceId        String         @unique
+  status           EWayBillStatus @default(GENERATED)
+  /// 12-digit e-way bill number from the portal.
+  ewbNo            String
+  ewbDate          DateTime
+  /// Validity end — derived from distance (≈ 1 day per 200 km).
+  validUpto        DateTime
+  /// ROAD / RAIL / AIR / SHIP.
+  transportMode    String         @default("ROAD")
+  vehicleNo        String?
+  transporterId    String?
+  transporterName  String?
+  transportDocNo   String?
+  transportDocDate DateTime?
+  distanceKm       Int            @default(0)
+  provider         String         @default("SIMULATOR")
+  requestJson      String
+  cancelReason     String?
+  cancelledAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("e_way_bills")
+}
+
+model EInvoice {
+  id            String         @id @default(uuid())
+  invoiceId     String         @unique
+  status        EInvoiceStatus @default(GENERATED)
+  /// 64-char Invoice Reference Number from the IRP.
+  irn           String
+  ackNo         String
+  ackDate       DateTime
+  /// Signed QR (JWT) printed on the invoice. Stored as text.
+  signedQrCode  String
+  /// The signed e-invoice JSON, when the IRP returns it.
+  signedInvoice String?
+  /// e-way bill number, when generated alongside.
+  ewbNo         String?
+  /// Which IRP path produced this — "SIMULATOR" until live creds are wired.
+  provider      String         @default("SIMULATOR")
+  /// The request payload sent to the IRP (for audit / re-send).
+  requestJson   String
+  cancelReason  String?
+  cancelledAt   DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@map("e_invoices")
+}
+
+// ---------------------------------------------------------------
+// Purchase estimates / vendor quotations — the buy-side mirror.
+// NOT accounting documents until converted to a purchase bill (which
+// posts the PURCHASE voucher, input GST credit and stock).
+// ---------------------------------------------------------------
+
+model PurchaseEstimate {
+  id             String         @id @default(uuid())
+  companyId      String
+  partyId        String
+  branchId       String?
+  estimateNo     Int
+  fiscalYear     String
+  date           DateTime       @db.Date
+  validUntil     DateTime?      @db.Date
+  placeOfSupply  String?
+  isInterState   Boolean
+  notes          String?
+  /// Whether to print the company name in the document header.
+  showCompanyName Boolean       @default(true)
+  subtotal       Decimal        @db.Decimal(18, 2)
+  discountTotal  Decimal        @default(0) @db.Decimal(18, 2)
+  taxableAmount  Decimal        @db.Decimal(18, 2)
+  cgstAmount     Decimal        @default(0) @db.Decimal(18, 2)
+  sgstAmount     Decimal        @default(0) @db.Decimal(18, 2)
+  igstAmount     Decimal        @default(0) @db.Decimal(18, 2)
+  roundOff       Decimal        @default(0) @db.Decimal(5, 2)
+  freightCharges Decimal        @default(0) @db.Decimal(18, 2)
+  otherCharges   Decimal        @default(0) @db.Decimal(18, 2)
+  total          Decimal        @db.Decimal(18, 2)
+  status         EstimateStatus @default(OPEN)
+  /// The purchase bill this quotation was converted into (one-to-one).
+  purchaseBillId String?        @unique
+  /// Payable voucher when booked as a bill (purchase-estimate-link mode).
+  voucherId      String?        @unique
+  createdById    String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  company      Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  party        Party                  @relation(fields: [partyId], references: [id])
+  branch       Branch?                @relation(fields: [branchId], references: [id])
+  purchaseBill PurchaseBill?          @relation(fields: [purchaseBillId], references: [id])
+  voucher      Voucher?               @relation(fields: [voucherId], references: [id])
+  lines        PurchaseEstimateLine[]
+  payments     PartyPayment[]
+
+  @@unique([companyId, fiscalYear, estimateNo])
+  @@index([companyId, date])
+  @@map("purchase_estimates")
+}
+
+model PurchaseEstimateLine {
+  id           String  @id @default(uuid())
+  estimateId   String
+  itemId       String?
+  lineNo       Int
+  description  String
+  hsnCode      String?
+  unit         String  @default("PCS")
+  quantity     Decimal @db.Decimal(18, 3)
+  rate         Decimal @db.Decimal(18, 2)
+  discountPct  Decimal @default(0) @db.Decimal(5, 2)
+  taxableValue Decimal @db.Decimal(18, 2)
+  gstRate      Decimal @db.Decimal(5, 2)
+  cgst         Decimal @default(0) @db.Decimal(18, 2)
+  sgst         Decimal @default(0) @db.Decimal(18, 2)
+  igst         Decimal @default(0) @db.Decimal(18, 2)
+  total        Decimal @db.Decimal(18, 2)
+
+  estimate PurchaseEstimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  item     Item?            @relation(fields: [itemId], references: [id])
+
+  @@index([estimateId])
+  @@map("purchase_estimate_lines")
+}
+
+model PurchaseEstimateCounter {
+  companyId  String
+  fiscalYear String
+  nextNo     Int    @default(1)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, fiscalYear])
+  @@map("purchase_estimate_counters")
+}

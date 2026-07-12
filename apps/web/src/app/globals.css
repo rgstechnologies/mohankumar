@@ -1,0 +1,140 @@
+@import 'tailwindcss';
+
+/*
+ * RGS ERP theme — premium enterprise SaaS, dark-first with a light mode.
+ * - Orange accent (#F97316) exposed as the `brand-*` scale.
+ * - Semantic surface tokens (surface/canvas/ink/muted/line…) that flip between
+ *   light and dark via a `.dark` class on <html>, so components written against
+ *   these tokens theme automatically with no per-file dark: variants.
+ * - 12px (0.75rem) default rounding, DM Sans typeface.
+ * All wired through Tailwind v4 @theme so utilities pick them up app-wide.
+ */
+@theme {
+  /* Accent — Primary Orange */
+  --color-brand-50: var(--brand-soft);
+  --color-brand-100: var(--brand-soft-2);
+  --color-brand-200: #fed7aa;
+  --color-brand-300: #fdba74;
+  --color-brand-400: #fb923c;
+  --color-brand-500: #f97316;
+  --color-brand-600: #f97316; /* primary */
+  --color-brand-700: #ea580c; /* hover */
+  --color-brand-800: #c2410c;
+  --color-brand-900: #9a3412;
+
+  /* Semantic surfaces / text / borders — resolve to the live CSS vars below. */
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-subtle: var(--subtle);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  /* Status */
+  --color-success: #22c55e;
+  --color-warning: #eab308;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+
+  /* Rounded, friendly surfaces. */
+  --radius-sm: 0.5rem;
+  --radius: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* ---- Light theme (DEFAULT) — clean, airy, Zoho-style ---- */
+:root {
+  color-scheme: light;
+  --canvas: #f5f7fa;
+  --surface: #ffffff;
+  --elevated: #ffffff;
+  --subtle: #f2f5f9;
+  --ink: #1a2433;
+  --muted: #5e6a7d;
+  --faint: #94a3b8;
+  --line: #e6eaf1;
+  --line-strong: #d4dae3;
+  --brand-soft: #fff4ec;
+  --brand-soft-2: #ffe6d5;
+}
+
+/* ---- Dark theme (default) ---- */
+.dark {
+  color-scheme: dark;
+  --canvas: #0f172a;
+  --surface: #1e293b;
+  --elevated: #243140;
+  --subtle: #172132;
+  --ink: #ffffff;
+  --muted: #94a3b8;
+  --faint: #64748b;
+  --line: #334155;
+  --line-strong: #475569;
+  --brand-soft: rgba(249, 115, 22, 0.12);
+  --brand-soft-2: rgba(249, 115, 22, 0.18);
+}
+
+body {
+  font-feature-settings: 'tnum' 0;
+  background: var(--canvas);
+  color: var(--ink);
+}
+
+/* Gradient sweep used by the landing headline. */
+@keyframes sweep {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[sweep_5s_linear_infinite\] { animation: none; }
+}
+
+/* Numeric columns line up cleanly in dense tables. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Slim scrollbar that blends into dark surfaces (sidebar) */
+.scrollbar-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(51 65 85) transparent; /* slate-700 */
+}
+.scrollbar-dark::-webkit-scrollbar {
+  width: 6px;
+}
+.scrollbar-dark::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb {
+  background: rgb(51 65 85);
+  border-radius: 9999px;
+}
+.scrollbar-dark::-webkit-scrollbar-thumb:hover {
+  background: rgb(71 85 105); /* slate-600 */
+}
+
+/* Slim scrollbar for light surfaces (wide tables, mobile nav) */
+.scrollbar-light {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(203 213 225) transparent; /* slate-300 */
+}
+.scrollbar-light::-webkit-scrollbar {
+  height: 6px;
+  width: 6px;
+}
+.scrollbar-light::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-light::-webkit-scrollbar-thumb {
+  background: rgb(203 213 225);
+  border-radius: 9999px;
+}

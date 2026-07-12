@@ -1,0 +1,58 @@
+# HTTPS nginx config — copy over docker/nginx.conf once you have certificates.
+#
+# 1. Point your domain's DNS A record at this server.
+# 2. Get certificates (certbot on the HOST, stopping nginx for a minute):
+#      docker compose -f docker-compose.prod.yml stop nginx
+#      sudo certbot certonly --standalone -d yourdomain.com
+#      docker compose -f docker-compose.prod.yml start nginx
+# 3. Replace yourdomain.com below, mount the certs in docker-compose.prod.yml:
+#      nginx:
+#        ports: ["80:80", "443:443"]
+#        volumes:
+#          - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+#          - /etc/letsencrypt:/etc/letsencrypt:ro
+# 4. Renewal: certbot renew runs from cron/systemd on the host; reload nginx
+#    after renewal: docker compose -f docker-compose.prod.yml exec nginx nginx -s reload
+
+server {
+    listen 80;
+    server_name yourdomain.com;
+    # ACME renewals keep working over plain HTTP.
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+    location / { return 301 https://$host$request_uri; }
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name yourdomain.com;
+
+    ssl_certificate     /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    client_max_body_size 40m;
+
+    location /api/ {
+        proxy_pass http://api:4000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    location / {
+        proxy_pass http://web:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

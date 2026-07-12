@@ -1,0 +1,49 @@
+name: Deploy
+
+# Runs on the self-hosted runner installed on the EC2 box. Triggered only
+# after the CI workflow succeeds on main (so broken code never deploys), or
+# manually via the Actions tab ("Run workflow").
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two deploys at once.
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # Deploy only when CI passed (or when triggered manually).
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: [self-hosted, bookly]
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # .env lives on the server (never in git). TLS certs come from the host's
+      # /etc/letsencrypt (mounted directly by docker-compose.prod.yml).
+      - name: Restore env
+        run: |
+          cp ~/bookly-secrets/.env .env
+
+      - name: Build & deploy
+        run: |
+          docker compose -f docker-compose.prod.yml up -d --build
+          docker image prune -f
+
+      - name: Health check
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sk https://localhost/api/v1/health | grep -q '"status":"ok"'; then
+              echo "✅ healthy"; exit 0
+            fi
+            echo "waiting for health... ($i)"; sleep 5
+          done
+          echo "❌ health check failed — recent api logs:"
+          docker compose -f docker-compose.prod.yml logs --tail=60 api
+          exit 1
