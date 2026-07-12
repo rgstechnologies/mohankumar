@@ -1,0 +1,28 @@
+# Secret-scanning config. CI runs gitleaks over the FULL history on every PR.
+#
+# Everything below is an allowlist for a KNOWN false positive. Each entry says
+# why the value is not a secret. Do not add to this file to make a build go
+# green — if the scanner flags something you cannot explain here, it is a leak:
+# rotate the credential first, then remove it from the history.
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = """
+RFC 6238 test vector. This is the shared secret published in the TOTP standard
+itself (Appendix B), used to prove our implementation produces the codes the RFC
+says it should. It is public by definition and guards nothing.
+"""
+paths = ['''apps/api/src/auth/totp\.spec\.ts''']
+regexes = ['''GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ''']
+
+[[allowlists]]
+description = """
+Placeholder Razorpay value from the pre-strip baseline commit's test environment.
+It is a made-up string ("rzp_test_secret_0123456789"), never a live key, and both
+the line and the Razorpay integration are gone from the current tree — it only
+survives in the first commit, which the full-history scan still reaches.
+"""
+paths = ['''apps/api/test/setup-env\.ts''']
+regexes = ['''rzp_test_secret_0123456789''']

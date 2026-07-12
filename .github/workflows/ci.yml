@@ -108,9 +108,15 @@ jobs:
           fetch-depth: 0 # gitleaks needs history to scan the whole diff
 
       - name: Scan for committed secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Scans the FULL history, not just the pushed diff. The action's default
+        # diff mode dies on a repo's first push (it tries to diff from the root
+        # commit's non-existent parent), and a diff-only scan would miss a secret
+        # that was committed before this workflow existed.
+        run: |
+          curl -sSL -o /tmp/gitleaks.tar.gz \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz
+          tar -xzf /tmp/gitleaks.tar.gz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --redact --no-banner --exit-code 1
 
       - uses: actions/setup-node@v4
         with:
