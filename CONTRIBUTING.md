@@ -10,8 +10,11 @@ Read this once before your first pull request.
 
 ## The five rules
 
-1. **Never push to `main`.** Not even a one-line fix. `main` is protected and
-   always deployable. Work on a branch, open a pull request.
+1. **Never push to `main`.** Not even a one-line fix. `main` is what the client
+   runs. Work on a branch, open a pull request.
+   *(Run `./scripts/install-git-hooks.sh` once — it refuses the push locally.
+   GitHub cannot enforce this server-side on the current plan, so for now this
+   rule is on us to keep.)*
 2. **All money maths goes through `apps/api/src/invoices/gst-calculator.ts`.**
    Do not compute a tax, a rounding, or a total anywhere else. If you think you
    need to, you have found a bug in the calculator — fix it there, with a test.
@@ -54,7 +57,7 @@ Trunk-based. Short-lived branches, merged quickly. No long-running `develop`
 branch — that is where merge disasters come from.
 
 ```
-main ──●───────●───────●──        ← protected, always deployable
+main ──●───────●───────●──        ← always deployable
         \     / \     /
          ●───●   ●───●            ← feat/… fix/… branches, hours-to-days old
 ```
@@ -90,8 +93,9 @@ pushed on-hand further negative. Adds a regression test.
 
 - One topic per PR. If you can't describe it in one sentence, split it.
 - Fill in the template. The "how did you check this" box is not optional.
-- **CI must be green** and **one approval** is required. Both are enforced —
-  you cannot merge around them.
+- **CI must be green** and **one approval** is required before you merge.
+  GitHub can't enforce this on the current plan, so it is a rule we keep, not a
+  wall that stops us. Merging a red PR is a choice you are making.
 - Squash-merge. `main` keeps one commit per change, and stays readable.
 
 ## Before you open a PR
@@ -140,6 +144,7 @@ three, or the build is lying to you.
 ```bash
 cp .env.example .env      # then change SEED_PASSWORD
 npm install
+./scripts/install-git-hooks.sh   # refuses accidental pushes to main
 npm run infra:up          # Postgres + Redis + Mailpit in Docker
 npm run db:migrate
 npm run db:seed           # creates the business + its single login
