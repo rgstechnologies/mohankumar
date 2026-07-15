@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { LanguageSwitcher } from './language-switcher';
 import { ThemeToggle } from './theme';
 import { LiveDashboard } from './auth/live-dashboard';
+import { APP_NAME, APP_LOGO } from '@/lib/brand';
 
 const STATS = [
   { k: '3-month', v: 'free trial' },
@@ -46,8 +47,8 @@ export function AuthShell({
 
         <div className="relative z-10 flex items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/rgs-logo.jpeg" alt="RGS ERP" className="h-10 w-10 rounded-xl bg-white object-contain" />
-          <span className="text-xl font-bold tracking-tight">RGS ERP</span>
+          <img src={APP_LOGO} alt={APP_NAME} className="h-10 w-10 rounded-xl bg-white object-contain" />
+          <span className="text-xl font-bold tracking-tight">{APP_NAME}</span>
         </div>
 
         <div className="relative z-10 mt-auto">
@@ -109,8 +110,8 @@ export function AuthShell({
           >
             <div className="mb-6 flex items-center gap-2 lg:hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/rgs-logo.jpeg" alt="RGS ERP" className="h-9 w-9 rounded-xl bg-white object-contain" />
-              <span className="text-lg font-bold tracking-tight text-ink">RGS ERP</span>
+              <img src={APP_LOGO} alt={APP_NAME} className="h-9 w-9 rounded-xl bg-white object-contain" />
+              <span className="text-lg font-bold tracking-tight text-ink">{APP_NAME}</span>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
             {subtitle && <p className="mt-1.5 text-sm text-muted">{subtitle}</p>}

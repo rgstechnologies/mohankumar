@@ -32,6 +32,7 @@ import {
   type StockRow,
   type VoucherView,
 } from '@/lib/accounting';
+import { APP_NAME, APP_LOGO } from '@/lib/brand';
 import { api, ApiError, isAuthenticated, logout, type Me } from '@/lib/api';
 import { Pagination, SearchInput, useTable } from '@/components/table';
 import { LanguageSwitcher } from '@/components/language-switcher';
@@ -344,9 +345,9 @@ export default function CompanyPage() {
         <div className="flex h-[70px] items-center gap-2.5 border-b border-line px-4">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/rgs-logo.jpeg" alt="RGS" className="h-9 w-9 shrink-0 rounded-xl bg-white object-contain shadow-sm" />
+            <img src={APP_LOGO} alt={APP_NAME} className="h-9 w-9 shrink-0 rounded-xl bg-white object-contain shadow-sm" />
             {!collapsed && (
-              <span className="truncate text-lg font-bold tracking-tight text-ink">RGS</span>
+              <span className="truncate text-lg font-bold tracking-tight text-ink">{APP_NAME}</span>
             )}
           </Link>
           <button

@@ -5,6 +5,7 @@ import { getLocale, getMessages } from 'next-intl/server';
 import { FeedbackProvider } from '@/components/feedback';
 import { NoScrollNumber } from '@/components/no-scroll-number';
 import { ThemeProvider } from '@/components/theme';
+import { APP_NAME } from '@/lib/brand';
 import './globals.css';
 
 const dmSans = DM_Sans({
@@ -14,9 +15,9 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: 'RGS ERP — Books, Billing & GST',
+  title: `${APP_NAME} — Books, Billing & GST`,
   description:
-    'RGS ERP is a modern accounting & business ERP for Indian SMEs — GST invoicing, double-entry books, inventory and statutory reports.',
+    `${APP_NAME} is a modern accounting & business ERP for Indian SMEs — GST invoicing, double-entry books, inventory and statutory reports.`,
 };
 
 export const viewport: Viewport = {

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button, Card, ErrorText, Input, Label } from '@/components/ui';
 import { ApiError, forgotPassword } from '@/lib/api';
+import { APP_NAME } from '@/lib/brand';
 
 export default function ForgotPasswordPage() {
   const t = useTranslations('auth.forgot');
@@ -33,7 +34,7 @@ export default function ForgotPasswordPage() {
   return (
     <main className="relative mx-auto flex min-h-screen max-w-md flex-col justify-center p-6">
       <div className="absolute right-4 top-4"><LanguageSwitcher /></div>
-      <h1 className="mb-1 text-center text-2xl font-bold">RGS ERP</h1>
+      <h1 className="mb-1 text-center text-2xl font-bold">{APP_NAME}</h1>
       <p className="mb-8 text-center text-sm text-muted">{t('subtitle')}</p>
       <Card>
         {sent ? (

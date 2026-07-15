@@ -8,6 +8,7 @@ import { useFeedback } from '@/components/feedback';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { Button, Card, ErrorText, Input, Label } from '@/components/ui';
 import { ApiError, resetPassword } from '@/lib/api';
+import { APP_NAME } from '@/lib/brand';
 
 export default function ResetPasswordPage() {
   const t = useTranslations('auth.reset');
@@ -42,7 +43,7 @@ export default function ResetPasswordPage() {
   return (
     <main className="relative mx-auto flex min-h-screen max-w-md flex-col justify-center p-6">
       <div className="absolute right-4 top-4"><LanguageSwitcher /></div>
-      <h1 className="mb-1 text-center text-2xl font-bold">RGS ERP</h1>
+      <h1 className="mb-1 text-center text-2xl font-bold">{APP_NAME}</h1>
       <p className="mb-8 text-center text-sm text-muted">{t('subtitle')}</p>
       <Card>
         <form onSubmit={onSubmit} className="space-y-4">

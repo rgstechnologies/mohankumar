@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { APP_NAME } from '@/lib/brand';
 
 const STEPS = [
   'Creating your company',
@@ -56,7 +57,7 @@ export function CompanyCreationSequence({ onDone }: { onDone: () => void }) {
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-[#FF7A00] to-[#c2410c] text-lg font-black text-white shadow-lg shadow-[#FF7A00]/40">
             N
           </span>
-          <span className="text-lg font-bold tracking-tight text-white">RGS ERP</span>
+          <span className="text-lg font-bold tracking-tight text-white">{APP_NAME}</span>
         </motion.div>
 
         <h2 className="text-xl font-bold text-white">Setting up your workspace</h2>
