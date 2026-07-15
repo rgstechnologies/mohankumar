@@ -17,7 +17,6 @@ export const ESTIMATE_ENTRY: DocEntryConfig = {
   apiBase: 'estimates',
   tab: 'estimates',
   secondDate: 'validUntil',
-  taxToggle: true,
   extraCharges: true,
   stateOfSupply: true,
 };
@@ -36,7 +35,6 @@ export const PURCHASE_ESTIMATE_ENTRY: DocEntryConfig = {
   tab: 'purchase-estimates',
   party: 'vendor',
   secondDate: 'validUntil',
-  taxToggle: true,
   extraCharges: true,
 };
 

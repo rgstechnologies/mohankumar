@@ -168,7 +168,7 @@ export function DocEntryForm({
   const [bankAccountId, setBankAccountId] = useState('');
   const [banks, setBanks] = useState<BankAccountRow[]>([]);
   const [cashBankLedgers, setCashBankLedgers] = useState<LedgerRow[]>([]);
-  const [lines, setLines] = useState<DraftLine[]>([{ ...EMPTY }]);
+  const [lines, setLines] = useState<DraftLine[]>([]);
   const [redeemPoints, setRedeemPoints] = useState('');
   const [batchOptions, setBatchOptions] = useState<Record<string, BatchStock[]>>({});
   const [error, setError] = useState('');
@@ -183,7 +183,7 @@ export function DocEntryForm({
         if (prev[itemId]) return prev;
         fetchItemBatches(companyId, itemId)
           .then((b) => setBatchOptions((p) => ({ ...p, [itemId]: b })))
-          .catch(() => {});
+          .catch(() => { });
         return prev;
       });
     },
@@ -217,7 +217,7 @@ export function DocEntryForm({
               const def = bs.find((b) => b.isDefault) ?? bs[0];
               if (def && !editId) setBankAccountId(def.id);
             })
-            .catch(() => {});
+            .catch(() => { });
         }
         if (config.creditCash) {
           await fetchLedgers(companyId)
@@ -227,7 +227,7 @@ export function DocEntryForm({
                   ls.filter((l) => ['Cash-in-Hand', 'Bank Accounts'].includes(l.group.name)),
                 );
             })
-            .catch(() => {});
+            .catch(() => { });
         }
 
         if (config.loyalty) {
@@ -242,7 +242,7 @@ export function DocEntryForm({
                   redeemValue: Number(c.loyaltyRedeemValue) || 1,
                 });
             })
-            .catch(() => {});
+            .catch(() => { });
         }
 
         // AI-scanned bill: prefill a NEW form from the draft stashed by the tab.
@@ -350,7 +350,13 @@ export function DocEntryForm({
     [customers, partyId],
   );
 
-  const taxedLines = config.noTax ? false : config.taxToggle && !applyTax ? false : true;
+  const taxedLines = config.noTax
+    ? false
+    : config.kind === 'estimate' || config.kind === 'purchaseEstimate'
+      ? false
+      : config.taxToggle && !applyTax
+        ? false
+        : true;
 
   function updateLine(index: number, patch: Partial<DraftLine>) {
     setLines((prev) =>
@@ -465,12 +471,12 @@ export function DocEntryForm({
               ledgerId: cashBankLedgers[0].id,
               method: 'CASH',
             })
-            .catch(() => {});
+            .catch(() => { });
         }
       }
       toast(editId ? t('toast.updated', { doc: docName }) : t('toast.created', { doc: docName }));
       if (thenPrint && id) {
-        await printFile(`/companies/${companyId}/${config.apiBase}/${id}/pdf`).catch(() => {});
+        await printFile(`/companies/${companyId}/${config.apiBase}/${id}/pdf`).catch(() => { });
       }
       router.push(returnHref);
     } catch (err) {
@@ -524,11 +530,10 @@ export function DocEntryForm({
                     key={m}
                     type="button"
                     onClick={() => setCashSale(m === 'cash')}
-                    className={`rounded px-2.5 py-1 ${
-                      (m === 'cash') === cashSale
-                        ? 'bg-brand-600 text-white'
-                        : 'text-muted hover:bg-subtle'
-                    }`}
+                    className={`rounded px-2.5 py-1 ${(m === 'cash') === cashSale
+                      ? 'bg-brand-600 text-white'
+                      : 'text-muted hover:bg-subtle'
+                      }`}
                   >
                     {t(m === 'cash' ? 'cash' : 'credit')}
                   </button>
@@ -696,20 +701,20 @@ export function DocEntryForm({
         <section className="rounded-xl border border-line bg-surface p-5 shadow-sm shadow-slate-200/50">
           <div className="mb-2 text-sm font-semibold text-ink">{t('items')}</div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full text-sm border-seperate">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
                   <th className="w-6 py-2">#</th>
-                  <th className="py-2">{t('colItem')}</th>
-                  <th className="w-20 py-2 text-right">{t('qty')}</th>
-                  <th className="w-14 py-2">{t('colUnit')}</th>
-                  <th className="w-24 py-2 text-right">
+                  <th className="w-60 py-2">{t('colItem')}</th>
+                  <th className="w-24 py-2 px-3 text-right">{t('qty')}</th>
+                  <th className="w-16 py-2 px-3">{t('colUnit')}</th>
+                  <th className="w-28 py-2 px-3 text-right">
                     {t('colPrice')}
                     <span className="block text-[9px] font-normal normal-case text-faint">{t('withoutTax')}</span>
                   </th>
-                  <th className="w-16 py-2 text-right">{t('colDisc')}</th>
+                  <th className="w-20 py-2 px-3 text-right">{t('colDisc')}</th>
                   {taxedLines && <th className="w-20 py-2 text-right">{t('colTax')}</th>}
-                  <th className="w-24 py-2 text-right">{t('colAmount')}</th>
+                  <th className="w-24 py-2 px-3 text-right">{t('colAmount')}</th>
                   <th className="w-6 py-2" />
                 </tr>
               </thead>
@@ -720,11 +725,11 @@ export function DocEntryForm({
                   return (
                     <tr key={i} className="border-b border-line align-top">
                       <td className="py-1.5 text-faint">{i + 1}</td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 w-[100px]">
                         <Combobox
                           value={line.itemId}
                           onChange={(v) => updateLine(i, { itemId: v })}
-                          placeholder={t('freeText')}
+                          placeholder={t('')}
                           searchPlaceholder={tc('search')}
                           className="w-full"
                           options={[
@@ -787,7 +792,7 @@ export function DocEntryForm({
                           </div>
                         )}
                       </td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 px-4">
                         <Input
                           type="number"
                           step="0.001"
@@ -795,11 +800,11 @@ export function DocEntryForm({
                           required
                           value={line.quantity}
                           onChange={(e) => updateLine(i, { quantity: e.target.value })}
-                          className="w-full text-right"
+                          className="w-full text-left"
                         />
                       </td>
-                      <td className="py-1.5 pr-2 text-xs text-muted">{item?.unit ?? '—'}</td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 text-xs text-muted px-4">{item?.unit ?? '—'}</td>
+                      <td className="py-1.5 pr-2 px-4">
                         <Input
                           type="number"
                           step="0.01"
@@ -807,10 +812,10 @@ export function DocEntryForm({
                           required={!line.itemId}
                           value={line.rate}
                           onChange={(e) => updateLine(i, { rate: e.target.value })}
-                          className="w-full text-right"
+                          className="w-full text-left"
                         />
                       </td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 px-4">
                         <Input
                           type="number"
                           step="0.01"
@@ -819,13 +824,13 @@ export function DocEntryForm({
                           value={line.discountPct}
                           onChange={(e) => updateLine(i, { discountPct: e.target.value })}
                           placeholder="0"
-                          className="w-full text-right"
+                          className="w-full text-left"
                         />
                       </td>
                       {taxedLines && (
-                        <td className="py-1.5 pr-2">
+                        <td className="py-1.5 pr-2 px-4">
                           {line.itemId ? (
-                            <span className="block text-right text-xs text-muted">
+                            <span className="block text-left text-xs text-muted">
                               {item ? Number(item.gstRate) : 0}%
                             </span>
                           ) : (
@@ -841,10 +846,10 @@ export function DocEntryForm({
                           )}
                         </td>
                       )}
-                      <td className="py-1.5 text-right font-medium tabular-nums text-ink">
+                      <td className="py-1.5 px-4 text-left font-medium tabular-nums text-ink">
                         ₹{inr(c.amount)}
                       </td>
-                      <td className="py-1.5 text-right">
+                      <td className="py-1.5 text-left">
                         {lines.length > 1 && (
                           <button
                             type="button"
@@ -902,7 +907,7 @@ export function DocEntryForm({
                   {t('redeemWorth', {
                     amount: inr(
                       Math.min(Number(redeemPoints), selectedCustomer.loyaltyPoints) *
-                        loyaltyCfg.redeemValue,
+                      loyaltyCfg.redeemValue,
                     ),
                   })}
                 </span>

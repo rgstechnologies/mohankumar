@@ -81,6 +81,8 @@ async function main() {
     });
     await accounting.seedDefaults(tx, created.id);
     return created;
+  }, {
+    timeout: 120000
   });
 
   console.log(`✔ created company "${company.name}" with the default chart of accounts`);

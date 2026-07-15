@@ -62,7 +62,7 @@ export function Select({
       options={options}
       placeholder={placeholder}
       disabled={disabled ?? false}
-      className={className ?? ''}
+      className={`w-full ${className ?? ''}`}
     />
   );
 }

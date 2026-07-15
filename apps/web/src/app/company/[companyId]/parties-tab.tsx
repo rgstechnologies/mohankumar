@@ -81,11 +81,18 @@ export function PartiesTab({
   );
 
   const [draft, setDraft] = useState<PartyDraft | null>(null);
+  const [isAliasSynced, setIsAliasSynced] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const editing = Boolean(draft?.id);
   const { toast } = useFeedback();
+
+  const startNewParty = () => {
+    setError('');
+    setIsAliasSynced(true);
+    setDraft({ ...EMPTY_DRAFT });
+  };
 
   /** Fetch GSTIN details from the government portal and auto-fill the form. */
   async function verifyGstin() {
@@ -97,7 +104,12 @@ export function PartiesTab({
       // The user clicked Verify, so always fill the name from the portal —
       // prefer the trade name, fall back to the legal name.
       const fetchedName = info.tradeName || info.legalName;
-      if (fetchedName) patch.name = fetchedName;
+      if (fetchedName) {
+        patch.name = fetchedName;
+        if (isAliasSynced) {
+          patch.aliasName = fetchedName;
+        }
+      }
       if (info.address) {
         if (info.address.building) patch.addressLine1 = info.address.building;
         if (info.address.street) patch.addressLine2 = info.address.street;
@@ -161,6 +173,7 @@ export function PartiesTab({
 
   async function startEdit(party: PartyRow) {
     setError('');
+    setIsAliasSynced(false);
     // Open immediately with what we have; the heavy base64 image is loaded next.
     setDraft({
       id: party.id,
@@ -183,12 +196,12 @@ export function PartiesTab({
       setDraft((d) =>
         d && d.id === party.id
           ? {
-              ...d,
-              image: full.image,
-              addressLine1: full.addressLine1 ?? d.addressLine1,
-              addressLine2: full.addressLine2 ?? d.addressLine2,
-              pincode: full.pincode ?? d.pincode,
-            }
+            ...d,
+            image: full.image,
+            addressLine1: full.addressLine1 ?? d.addressLine1,
+            addressLine2: full.addressLine2 ?? d.addressLine2,
+            pincode: full.pincode ?? d.pincode,
+          }
           : d,
       );
     } catch {
@@ -216,6 +229,10 @@ export function PartiesTab({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!draft) return;
+    if (draft.type === 'CUSTOMER' && !draft.state) {
+      setError(t('stateRequired'));
+      return;
+    }
     setError('');
     setBusy(true);
     try {
@@ -278,8 +295,11 @@ export function PartiesTab({
             <Button
               variant={draft && !editing ? 'secondary' : 'primary'}
               onClick={() => {
-                setError('');
-                setDraft(draft && !editing ? null : { ...EMPTY_DRAFT });
+                if (draft && !editing) {
+                  setDraft(null);
+                } else {
+                  startNewParty();
+                }
               }}
             >
               {draft && !editing ? tc('close') : t('newParty')}
@@ -360,25 +380,41 @@ export function PartiesTab({
               </div>
             )}
             <div className="sm:col-span-2">
-              <Label>{tc('name')}</Label>
+              <Label>{tc('name')} <span className="text-red-500">*</span></Label>
               <Input
                 required
                 value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                onChange={(e) => {
+                  const newName = e.target.value;
+                  setDraft({
+                    ...draft,
+                    name: newName,
+                    ...(isAliasSynced ? { aliasName: newName } : {}),
+                  });
+                }}
+                onBlur={() => {
+                  if (draft.aliasName.trim() !== '') {
+                    setIsAliasSynced(false);
+                  }
+                }}
               />
             </div>
             <div>
               <Label>{t('aliasOptional')}</Label>
               <Input
                 value={draft.aliasName}
-                onChange={(e) => setDraft({ ...draft, aliasName: e.target.value })}
+                onChange={(e) => {
+                  setIsAliasSynced(false);
+                  setDraft({ ...draft, aliasName: e.target.value });
+                }}
               />
             </div>
             <div>
-              <Label>{t('gstinOptional')} <HelpTip text={t('gstinHelp')} /></Label>
+              <Label>{draft.type === 'CUSTOMER' ? <>{t('gstin')} <span className="text-red-500">*</span></> : t('gstinOptional')} <HelpTip text={t('gstinHelp')} /></Label>
               <div className="flex gap-2">
                 <Input
                   className="flex-1"
+                  required={draft.type === 'CUSTOMER'}
                   value={draft.gstin}
                   maxLength={15}
                   onChange={(e) => setDraft({ ...draft, gstin: e.target.value.toUpperCase() })}
@@ -398,15 +434,17 @@ export function PartiesTab({
               </div>
             </div>
             <div>
-              <Label>{t('phoneOptional')}</Label>
+              <Label>{draft.type === 'CUSTOMER' ? <>{t('phone')} <span className="text-red-500">*</span></> : t('phoneOptional')}</Label>
               <Input
+                required={draft.type === 'CUSTOMER'}
                 value={draft.phone}
                 onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
               />
             </div>
             <div>
-              <Label>{t('stateLabel')}</Label>
+              <Label>{t('stateLabel')}{draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}</Label>
               <Select
+                required={draft.type === 'CUSTOMER'}
                 value={draft.state}
                 onChange={(e) => setDraft({ ...draft, state: e.target.value })}
               >
@@ -428,8 +466,9 @@ export function PartiesTab({
               />
             </div>
             <div className="sm:col-span-2">
-              <Label>{t('addressLine1')}</Label>
+              <Label>{t('addressLine1')}{draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}</Label>
               <Input
+                required={draft.type === 'CUSTOMER'}
                 value={draft.addressLine1}
                 onChange={(e) => setDraft({ ...draft, addressLine1: e.target.value })}
               />
@@ -442,15 +481,19 @@ export function PartiesTab({
               />
             </div>
             <div>
-              <Label>{t('cityOptional')}</Label>
+              <Label>{draft.type === 'CUSTOMER' ? <>{t('city')} <span className="text-red-500">*</span></> : t('cityOptional')}</Label>
               <Input
+                required={draft.type === 'CUSTOMER'}
                 value={draft.city}
                 onChange={(e) => setDraft({ ...draft, city: e.target.value })}
               />
             </div>
             <div>
-              <Label>{t('pincodeOptional')}</Label>
+              <Label>{draft.type === 'CUSTOMER' ? <>{t('pincode')} <span className="text-red-500">*</span></> : t('pincodeOptional')}</Label>
               <Input
+                required={draft.type === 'CUSTOMER'}
+                pattern="[0-9]{6}"
+                title="Pincode must be exactly 6 digits"
                 value={draft.pincode}
                 maxLength={6}
                 onChange={(e) =>
@@ -501,42 +544,44 @@ export function PartiesTab({
             </div>
 
             {/* Photo / logo */}
-            <div className="sm:col-span-3">
-              <Label>{t('image.label')}</Label>
-              <div className="flex items-center gap-3">
-                {draft.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={draft.image}
-                    alt=""
-                    className="h-14 w-14 rounded-md border border-line object-cover"
-                  />
-                ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-line-strong text-[10px] text-faint">
-                    {t('image.none')}
-                  </div>
-                )}
-                <label className="cursor-pointer rounded-md border border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:bg-subtle">
-                  {t('image.choose')}
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={onImageFile}
-                    className="hidden"
-                  />
-                </label>
-                {draft.image && (
-                  <button
-                    type="button"
-                    onClick={() => setDraft({ ...draft, image: null })}
-                    className="text-xs font-medium text-red-500 hover:underline"
-                  >
-                    {t('image.remove')}
-                  </button>
-                )}
-                <span className="text-[11px] text-faint">{t('image.hint')}</span>
+            {draft.type !== 'CUSTOMER' && (
+              <div className="sm:col-span-3">
+                <Label>{t('image.label')}</Label>
+                <div className="flex items-center gap-3">
+                  {draft.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={draft.image}
+                      alt=""
+                      className="h-14 w-14 rounded-md border border-line object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-line-strong text-[10px] text-faint">
+                      {t('image.none')}
+                    </div>
+                  )}
+                  <label className="cursor-pointer rounded-md border border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:bg-subtle">
+                    {t('image.choose')}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={onImageFile}
+                      className="hidden"
+                    />
+                  </label>
+                  {draft.image && (
+                    <button
+                      type="button"
+                      onClick={() => setDraft({ ...draft, image: null })}
+                      className="text-xs font-medium text-red-500 hover:underline"
+                    >
+                      {t('image.remove')}
+                    </button>
+                  )}
+                  <span className="text-[11px] text-faint">{t('image.hint')}</span>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex items-end gap-3 sm:col-span-3">
               <Button type="submit" disabled={busy}>
@@ -558,7 +603,7 @@ export function PartiesTab({
             body={t('emptyBody')}
             action={
               canManage && (
-                <Button onClick={() => setDraft({ ...EMPTY_DRAFT })}>{t('addParty')}</Button>
+                <Button onClick={startNewParty}>{t('addParty')}</Button>
               )
             }
           />

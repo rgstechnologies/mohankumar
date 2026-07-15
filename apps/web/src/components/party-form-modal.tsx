@@ -61,6 +61,7 @@ export function AddPartyModal({
   const t = useTranslations('parties');
   const tc = useTranslations('common');
   const { toast } = useFeedback();
+  const [isAliasSynced, setIsAliasSynced] = useState(true);
   const [draft, setDraft] = useState<PartyDraft>({
     type: defaultType,
     name: '',
@@ -89,7 +90,12 @@ export function AddPartyModal({
       // The user clicked Verify, so always fill the name from the portal —
       // prefer the trade name, fall back to the legal name.
       const fetchedName = info.tradeName || info.legalName;
-      if (fetchedName) patch.name = fetchedName;
+      if (fetchedName) {
+        patch.name = fetchedName;
+        if (isAliasSynced) {
+          patch.aliasName = fetchedName;
+        }
+      }
       if (info.address) {
         if (info.address.building) patch.addressLine1 = info.address.building;
         if (info.address.street) patch.addressLine2 = info.address.street;
@@ -114,6 +120,10 @@ export function AddPartyModal({
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (draft.type === 'CUSTOMER' && !draft.state) {
+      setError(t('stateRequired'));
+      return;
+    }
     setError('');
     setBusy(true);
     try {
@@ -165,22 +175,48 @@ export function AddPartyModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <Label>{tc('name')}</Label>
-            <Input required value={draft.name} onChange={(e) => set({ name: e.target.value })} />
+            <Label>{tc('name')} <span className="text-red-500">*</span></Label>
+            <Input
+              required
+              value={draft.name}
+              onChange={(e) => {
+                const newName = e.target.value;
+                set({
+                  name: newName,
+                  ...(isAliasSynced ? { aliasName: newName } : {}),
+                });
+              }}
+              onBlur={() => {
+                if (draft.aliasName.trim() !== '') {
+                  setIsAliasSynced(false);
+                }
+              }}
+            />
           </div>
           <div>
             <Label>{t('aliasOptional')}</Label>
-            <Input value={draft.aliasName} onChange={(e) => set({ aliasName: e.target.value })} />
+            <Input
+              value={draft.aliasName}
+              onChange={(e) => {
+                setIsAliasSynced(false);
+                set({ aliasName: e.target.value });
+              }}
+            />
           </div>
           <div>
-            <Label>{t('phoneOptional')}</Label>
-            <Input value={draft.phone} onChange={(e) => set({ phone: e.target.value })} />
+            <Label>{draft.type === 'CUSTOMER' ? <>{t('phone')} <span className="text-red-500">*</span></> : t('phoneOptional')}</Label>
+            <Input
+              required={draft.type === 'CUSTOMER'}
+              value={draft.phone}
+              onChange={(e) => set({ phone: e.target.value })}
+            />
           </div>
           <div>
-            <Label>{t('gstinOptional')}</Label>
+            <Label>{draft.type === 'CUSTOMER' ? <>{t('gstin')} <span className="text-red-500">*</span></> : t('gstinOptional')}</Label>
             <div className="flex gap-2">
               <Input
                 className="flex-1"
+                required={draft.type === 'CUSTOMER'}
                 value={draft.gstin}
                 maxLength={15}
                 onChange={(e) => set({ gstin: e.target.value.toUpperCase() })}
@@ -199,8 +235,12 @@ export function AddPartyModal({
             </div>
           </div>
           <div>
-            <Label>{t('stateLabel')}</Label>
-            <Select value={draft.state} onChange={(e) => set({ state: e.target.value })}>
+            <Label>{t('stateLabel')}{draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}</Label>
+            <Select
+              required={draft.type === 'CUSTOMER'}
+              value={draft.state}
+              onChange={(e) => set({ state: e.target.value })}
+            >
               <option value="">{t('selectState')}</option>
               {INDIAN_STATES.map((s) => (
                 <option key={s.code} value={s.name}>
@@ -219,20 +259,31 @@ export function AddPartyModal({
             />
           </div>
           <div className="col-span-2">
-            <Label>{t('addressLine1')}</Label>
-            <Input value={draft.addressLine1} onChange={(e) => set({ addressLine1: e.target.value })} />
+            <Label>{t('addressLine1')}{draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}</Label>
+            <Input
+              required={draft.type === 'CUSTOMER'}
+              value={draft.addressLine1}
+              onChange={(e) => set({ addressLine1: e.target.value })}
+            />
           </div>
           <div className="col-span-2">
             <Label>{t('addressLine2')}</Label>
             <Input value={draft.addressLine2} onChange={(e) => set({ addressLine2: e.target.value })} />
           </div>
           <div>
-            <Label>{t('cityOptional')}</Label>
-            <Input value={draft.city} onChange={(e) => set({ city: e.target.value })} />
+            <Label>{draft.type === 'CUSTOMER' ? <>{t('city')} <span className="text-red-500">*</span></> : t('cityOptional')}</Label>
+            <Input
+              required={draft.type === 'CUSTOMER'}
+              value={draft.city}
+              onChange={(e) => set({ city: e.target.value })}
+            />
           </div>
           <div>
-            <Label>{t('pincodeOptional')}</Label>
+            <Label>{draft.type === 'CUSTOMER' ? <>{t('pincode')} <span className="text-red-500">*</span></> : t('pincodeOptional')}</Label>
             <Input
+              required={draft.type === 'CUSTOMER'}
+              pattern="[0-9]{6}"
+              title="Pincode must be exactly 6 digits"
               value={draft.pincode}
               maxLength={6}
               onChange={(e) => set({ pincode: e.target.value.replace(/\D/g, '') })}
