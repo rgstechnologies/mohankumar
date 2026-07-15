@@ -2,11 +2,11 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useFeedback } from '@/components/feedback';
+
 import { ThemeToggle } from '@/components/theme';
-import { Button, Card, ErrorText, HelpTip, Input, Label, Select } from '@/components/ui';
+
 import {
   fetchGroups,
   fetchInvoices,
@@ -18,9 +18,7 @@ import {
   fetchPurchaseBills,
   fetchStock,
   fetchVouchers,
-  flattenGroups,
-  inr,
-  VOUCHER_TYPES,
+
   type AccountGroup,
   type InvoiceView,
   type EstimateView,
@@ -33,10 +31,10 @@ import {
   type VoucherView,
 } from '@/lib/accounting';
 import { APP_NAME, APP_LOGO } from '@/lib/brand';
-import { api, ApiError, isAuthenticated, logout, type Me } from '@/lib/api';
-import { Pagination, SearchInput, useTable } from '@/components/table';
+import { api, isAuthenticated, logout, type Me } from '@/lib/api';
+
 import { LanguageSwitcher } from '@/components/language-switcher';
-import { NotesTab } from './notes-tab';
+
 import { InvoicesTab } from './invoices-tab';
 import { EstimatesTab } from './estimates-tab';
 import { ProfileTab } from './profile-tab';
@@ -46,7 +44,7 @@ import { ItemsTab } from './items-tab';
 import { OverviewTab } from './overview-tab';
 import { PartiesTab } from './parties-tab';
 import { ActivityTab } from './activity-tab';
-import { PurchasesTab } from './purchases-tab';
+
 import { ReportsTab } from './reports-tab';
 import { StockTab } from './stock-tab';
 
@@ -243,15 +241,16 @@ export default function CompanyPage() {
       return next;
     });
   }, []);
-  const [groups, setGroups] = useState<AccountGroup[]>([]);
+  const [, setGroups] = useState<AccountGroup[]>([]);
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
-  const [vouchers, setVouchers] = useState<VoucherView[]>([]);
+  const [, setVouchers] = useState<VoucherView[]>([]);
   const [parties, setParties] = useState<PartyRow[]>([]);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [invoices, setInvoices] = useState<InvoiceView[]>([]);
   const [estimates, setEstimates] = useState<EstimateView[]>([]);
-  const [bills, setBills] = useState<PurchaseBillView[]>([]);
-  const [notes, setNotes] = useState<NoteView[]>([]);
+  const [, setBills] = useState<PurchaseBillView[]>([]);
+
+  const [, setNotes] = useState<NoteView[]>([]);
   const [stock, setStock] = useState<StockRow[]>([]);
 
   // Open a specific tab when arriving with ?tab=… (e.g. returning from a
@@ -719,13 +718,9 @@ export default function CompanyPage() {
 // Vouchers
 // ----------------------------------------------------------------
 
-interface DraftLine {
-  ledgerId: string;
-  type: 'DEBIT' | 'CREDIT';
-  amount: string;
-}
 
-const EMPTY_LINE: DraftLine = { ledgerId: '', type: 'DEBIT', amount: '' };
+
+
 
 // function VouchersTab({
 //   companyId,

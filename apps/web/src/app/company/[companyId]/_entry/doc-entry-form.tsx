@@ -168,7 +168,7 @@ export function DocEntryForm({
   const [bankAccountId, setBankAccountId] = useState('');
   const [banks, setBanks] = useState<BankAccountRow[]>([]);
   const [cashBankLedgers, setCashBankLedgers] = useState<LedgerRow[]>([]);
-  const [lines, setLines] = useState<DraftLine[]>([]);
+  const [lines, setLines] = useState<DraftLine[]>([{ ...EMPTY }]);
   const [redeemPoints, setRedeemPoints] = useState('');
   const [batchOptions, setBatchOptions] = useState<Record<string, BatchStock[]>>({});
   const [error, setError] = useState('');
@@ -421,8 +421,9 @@ export function DocEntryForm({
       notes: combinedNotes,
       lines: lines.map((line) => {
         const { rateExcl } = lineCalc(line);
+        const isFreeText = !line.itemId || line.itemId === 'FREE_TEXT';
         const payload: Record<string, unknown> = {
-          itemId: line.itemId || undefined,
+          itemId: !isFreeText ? line.itemId : undefined,
           description: line.description || undefined,
           quantity: Number(line.quantity),
           rate: line.rate ? Math.round(rateExcl * 100) / 100 : undefined,
@@ -433,9 +434,7 @@ export function DocEntryForm({
         // their DTO rejects gstRate/discountPct, so never send them.
         if (!config.noTax) {
           payload.discountPct = Number(line.discountPct) || 0;
-          // When "Apply tax" is off, force 0 on EVERY line (incl. item lines —
-          // otherwise the server falls back to the item's own GST rate).
-          payload.gstRate = taxedLines ? (line.itemId ? undefined : Number(line.gstRate)) : 0;
+          payload.gstRate = taxedLines ? (Number(line.gstRate) || 0) : 0;
         }
         return payload;
       }),
@@ -505,7 +504,12 @@ export function DocEntryForm({
   }
 
   const canSave =
-    !!partyId && lines.some((l) => Number(l.quantity) > 0 && (l.itemId || l.description));
+    !!partyId &&
+    lines.some(
+      (l) =>
+        Number(l.quantity) > 0 &&
+        ((l.itemId && l.itemId !== 'FREE_TEXT') || (l.itemId === 'FREE_TEXT' && l.description)),
+    );
 
   return (
     <div className="min-h-screen bg-subtle">
@@ -705,16 +709,16 @@ export function DocEntryForm({
               <thead>
                 <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
                   <th className="w-6 py-2">#</th>
-                  <th className="w-60 py-2">{t('colItem')}</th>
-                  <th className="w-24 py-2 px-3 text-right">{t('qty')}</th>
-                  <th className="w-16 py-2 px-3">{t('colUnit')}</th>
-                  <th className="w-28 py-2 px-3 text-right">
+                  <th className="w-60 py-2 pr-2">{t('colItem')}</th>
+                  <th className="w-24 py-2 px-4 text-left">{t('qty')}</th>
+                  <th className="w-16 py-2 px-4">{t('colUnit')}</th>
+                  <th className="w-28 py-2 px-4 text-left">
                     {t('colPrice')}
                     <span className="block text-[9px] font-normal normal-case text-faint">{t('withoutTax')}</span>
                   </th>
-                  <th className="w-20 py-2 px-3 text-right">{t('colDisc')}</th>
-                  {taxedLines && <th className="w-20 py-2 text-right">{t('colTax')}</th>}
-                  <th className="w-24 py-2 px-3 text-right">{t('colAmount')}</th>
+                  <th className="w-20 py-2 px-4 text-left">{t('colDisc')}</th>
+                  {taxedLines && <th className="w-20 py-2 px-4 text-left">{t('colTax')}</th>}
+                  <th className="w-24 py-2 px-4 text-left">{t('colAmount')}</th>
                   <th className="w-6 py-2" />
                 </tr>
               </thead>
@@ -729,11 +733,10 @@ export function DocEntryForm({
                         <Combobox
                           value={line.itemId}
                           onChange={(v) => updateLine(i, { itemId: v })}
-                          placeholder={t('')}
+                          placeholder="Select Item"
                           searchPlaceholder={tc('search')}
                           className="w-full"
                           options={[
-                            { value: '', label: t('freeText') },
                             ...items.map((it) => ({
                               value: it.id,
                               label: it.name,
@@ -748,7 +751,7 @@ export function DocEntryForm({
                         >
                           {t('addItem')}
                         </button>
-                        {!line.itemId && (
+                        {line.itemId === 'FREE_TEXT' && (
                           <Input
                             required
                             value={line.description}
@@ -809,7 +812,7 @@ export function DocEntryForm({
                           type="number"
                           step="0.01"
                           min="0"
-                          required={!line.itemId}
+                          required={!line.itemId || line.itemId === 'FREE_TEXT'}
                           value={line.rate}
                           onChange={(e) => updateLine(i, { rate: e.target.value })}
                           className="w-full text-left"
@@ -829,21 +832,16 @@ export function DocEntryForm({
                       </td>
                       {taxedLines && (
                         <td className="py-1.5 pr-2 px-4">
-                          {line.itemId ? (
-                            <span className="block text-left text-xs text-muted">
-                              {item ? Number(item.gstRate) : 0}%
-                            </span>
-                          ) : (
-                            <Select
-                              value={line.gstRate}
-                              onChange={(e) => updateLine(i, { gstRate: e.target.value })}
-                              className="w-full"
-                            >
-                              {GST_RATES.map((r) => (
-                                <option key={r} value={r}>{t('gstOption', { rate: r })}</option>
-                              ))}
-                            </Select>
-                          )}
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max="100"
+                            value={line.gstRate}
+                            onChange={(e) => updateLine(i, { gstRate: e.target.value })}
+                            placeholder="0"
+                            className="w-full text-left"
+                          />
                         </td>
                       )}
                       <td className="py-1.5 px-4 text-left font-medium tabular-nums text-ink">
