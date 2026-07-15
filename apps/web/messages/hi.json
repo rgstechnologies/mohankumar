@@ -31,7 +31,8 @@
     "deleted": "हटा दिया गया",
     "deleteDocTitle": "स्थायी रूप से हटाएँ?",
     "deleteDocBody": "यह दस्तावेज़ को स्थायी रूप से हटा देता है और उसकी लेखा प्रविष्टियाँ, भुगतान और स्टॉक उलट देता है। इसे पूर्ववत नहीं किया जा सकता।",
-    "stateCode": "राज्य कोड"
+    "stateCode": "राज्य कोड",
+    "reset": "रीसेट"
   },
   "table": {
     "records": "{count, plural, one {# रिकॉर्ड} other {# रिकॉर्ड}}",
@@ -1022,13 +1023,14 @@
     "saved": "ई-इनवॉइस क्रेडेंशियल सहेजे गए"
   },
   "items": {
-    "searchPlaceholder": "नाम, HSN, SKU से खोजें…",
+    "searchPlaceholder": "नाम, HSN, कोड से खोजें…",
     "newItem": "+ नई वस्तु",
     "newItemTitle": "नई वस्तु",
     "editTitle": "{name} संपादित करें",
     "itemFallback": "वस्तु",
     "fields": {
       "itemName": "वस्तु का नाम",
+      "itemCode": "वस्तु कोड",
       "hsnCode": "HSN कोड",
       "unit": "इकाई",
       "gstRate": "GST दर %",
@@ -1065,6 +1067,7 @@
     },
     "table": {
       "item": "वस्तु",
+      "itemCode": "कोड",
       "hsn": "HSN",
       "unit": "इकाई",
       "gst": "GST",

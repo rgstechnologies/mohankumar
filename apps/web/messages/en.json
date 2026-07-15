@@ -31,7 +31,8 @@
     "deleted": "Deleted",
     "deleteDocTitle": "Delete permanently?",
     "deleteDocBody": "This permanently deletes the document and reverses its accounting entries, payments and stock. This cannot be undone.",
-    "stateCode": "State Code"
+    "stateCode": "State Code",
+    "reset": "Reset"
   },
   "table": {
     "records": "{count, plural, one {# record} other {# records}}",
@@ -1022,13 +1023,14 @@
     "saved": "E-invoice credentials saved"
   },
   "items": {
-    "searchPlaceholder": "Search by name, HSN, SKU…",
+    "searchPlaceholder": "Search by name, HSN, Code…",
     "newItem": "+ New item",
     "newItemTitle": "New item",
     "editTitle": "Edit {name}",
     "itemFallback": "item",
     "fields": {
       "itemName": "Item name",
+      "itemCode": "Item code",
       "hsnCode": "HSN code",
       "unit": "Unit",
       "gstRate": "GST rate %",
@@ -1065,6 +1067,7 @@
     },
     "table": {
       "item": "Item",
+      "itemCode": "Code",
       "hsn": "HSN",
       "unit": "Unit",
       "gst": "GST",

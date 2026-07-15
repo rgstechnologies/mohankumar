@@ -26,11 +26,11 @@ export function AddItemModal({
   const tc = useTranslations('common');
   const { toast } = useFeedback();
   const [name, setName] = useState('');
+  const [itemCode, setItemCode] = useState('');
   const [hsn, setHsn] = useState('');
   const [unit, setUnit] = useState('PCS');
   const [gstRate, setGstRate] = useState('0');
   const [salePrice, setSalePrice] = useState('');
-  const [purchasePrice, setPurchasePrice] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -41,11 +41,11 @@ export function AddItemModal({
     try {
       const created = await api.post<ItemRow>(`/companies/${companyId}/items`, {
         name: name.trim(),
+        sku: itemCode.trim() || undefined,
         hsnCode: hsn || undefined,
         unit,
         gstRate: Number(gstRate),
         salePrice: salePrice ? Number(salePrice) : undefined,
-        purchasePrice: purchasePrice ? Number(purchasePrice) : undefined,
       });
       toast(t('toast.itemCreated'));
       await onSaved(created);
@@ -67,11 +67,15 @@ export function AddItemModal({
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-bold text-ink">{t('newItemTitle')}</h2>
-        <div>
-          <Label>{t('fields.itemName')}</Label>
-          <Input required value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
         <div className="grid grid-cols-2 gap-3">
+          <div>
+            <Label>{t('fields.itemName')}</Label>
+            <Input required value={name} onChange={(e) => setName(e.target.value)} placeholder={t('fields.itemName')} />
+          </div>
+          <div>
+            <Label>{t('fields.itemCode')}</Label>
+            <Input required value={itemCode} onChange={(e) => setItemCode(e.target.value)} placeholder={t('fields.itemCode')} />
+          </div>
           <div>
             <Label>{t('fields.hsnCode')}</Label>
             <Input
@@ -109,22 +113,13 @@ export function AddItemModal({
               min="0"
               value={salePrice}
               onChange={(e) => setSalePrice(e.target.value)}
-            />
-          </div>
-          <div>
-            <Label>{t('fields.purchasePrice')}</Label>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={purchasePrice}
-              onChange={(e) => setPurchasePrice(e.target.value)}
+              placeholder={t('fields.salePrice')}
             />
           </div>
         </div>
         <ErrorText>{error}</ErrorText>
         <div className="flex gap-3 pt-1">
-          <Button type="submit" disabled={busy || !name.trim()}>
+          <Button type="submit" disabled={busy || !name.trim() || !itemCode.trim()}>
             {busy ? tc('saving') : t('saveItem')}
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>
