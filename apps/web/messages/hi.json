@@ -70,8 +70,8 @@
     "nav": {
       "overview": "अवलोकन",
       "pos": "पॉइंट ऑफ़ सेल",
-      "invoices": "बिक्री इनवॉइस",
-      "estimates": "अनुमान",
+      "invoices": "बिक्री बिल",
+      "estimates": "अनुमान बिल",
       "purchaseOrders": "खरीद ऑर्डर",
       "purchases": "खरीद",
       "purchaseEstimates": "खरीद अनुमान",
@@ -98,14 +98,14 @@
       "printSettings": "प्रिंट सेटिंग्स",
       "paymentIn": "भुगतान प्राप्त",
       "paymentOut": "भुगतान दिया",
-      "estimatePayments": "अनुमान बैंकिंग",
-      "invoicePayments": "चालान बैंकिंग"
+      "estimatePayments": "अनुमान भुगतान प्राप्त",
+      "invoicePayments": "चालान भुगतान प्राप्त"
     },
     "titles": {
       "overview": "अवलोकन",
       "pos": "पॉइंट ऑफ़ सेल",
-      "invoices": "बिक्री इनवॉइस",
-      "estimates": "अनुमान",
+      "invoices": "बिक्री बिल",
+      "estimates": "अनुमान बिल",
       "purchases": "खरीद बिल",
       "purchase-estimates": "खरीद अनुमान",
       "stock": "स्टॉक",
@@ -132,8 +132,8 @@
       "print-settings": "प्रिंट सेटिंग्स",
       "payment-in": "भुगतान प्राप्त",
       "payment-out": "भुगतान दिया",
-      "estimate-payments": "अनुमान बैंकिंग",
-      "invoice-payments": "चालान बैंकिंग"
+      "estimate-payments": "अनुमान भुगतान प्राप्त",
+      "invoice-payments": "चालान भुगतान प्राप्त"
     },
     "roles": {
       "OWNER": "मालिक",
@@ -1156,7 +1156,7 @@
     "preview": {
       "menu": {
         "overview": "अवलोकन",
-        "salesInvoices": "बिक्री इनवॉइस",
+        "salesInvoices": "बिक्री बिल",
         "purchases": "खरीद",
         "stock": "स्टॉक",
         "reports": "रिपोर्ट"
@@ -1308,7 +1308,7 @@
     "payables": "देय",
     "lowStockItems": "कम स्टॉक वाले आइटम",
     "recentInvoices": "हाल की इनवॉइस",
-    "noInvoicesYet": "अभी तक कोई इनवॉइस नहीं — बिक्री इनवॉइस से अपनी पहली इनवॉइस बनाएँ।"
+    "noInvoicesYet": "अभी तक कोई बिल नहीं — बिक्री बिल से अपना पहला बिल बनाएँ।"
   },
   "parties": {
     "searchPlaceholder": "नाम, GSTIN, शहर से खोजें…",
@@ -1324,6 +1324,7 @@
     "gstinOptional": "GSTIN (वैकल्पिक)",
     "gstinHelp": "15-अक्षरों का GST पंजीकरण नंबर। पहले 2 अंक राज्य कोड होते हैं — RGS इसका उपयोग चालान पर CGST+SGST (समान राज्य) बनाम IGST (अन्य राज्य) तय करने के लिए करता है।",
     "phoneOptional": "फ़ोन (वैकल्पिक)",
+    "phone": "फ़ोन",
     "cityOptional": "शहर (वैकल्पिक)",
     "aliasOptional": "उपनाम / संक्षिप्त नाम",
     "stateLabel": "राज्य",
@@ -1331,6 +1332,7 @@
     "addressLine1": "पता पंक्ति 1",
     "addressLine2": "पता पंक्ति 2",
     "pincodeOptional": "पिनकोड",
+    "pincode": "पिनकोड",
     "addCustomerTitle": "ग्राहक जोड़ें",
     "addVendorTitle": "विक्रेता जोड़ें",
     "openingBalance": "प्रारंभिक शेष",
