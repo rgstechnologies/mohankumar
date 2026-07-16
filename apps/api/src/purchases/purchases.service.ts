@@ -811,6 +811,7 @@ export class PurchasesService {
       return {
         itemId: item.id,
         name: item.name,
+        sku: item.sku,
         unit: item.unit,
         hsnCode: item.hsnCode,
         barcode: item.barcode,

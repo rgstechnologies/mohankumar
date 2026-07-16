@@ -405,6 +405,7 @@ export interface ChequeView {
 export interface StockRow {
   itemId: string;
   name: string;
+  sku: string | null;
   unit: string;
   hsnCode: string | null;
   barcode: string | null;
