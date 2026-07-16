@@ -82,7 +82,7 @@
       "ledgers": "Ledgers",
       "banking": "Banks",
       "reports": "Reports",
-      "parties": "Customers & Vendors",
+      "parties": "Customers",
       "branches": "Branches",
       "payroll": "Payroll",
       "importData": "Import data",
@@ -2527,6 +2527,7 @@
       "purchaseOrder": "Purchase Order",
       "purchaseBill": "Purchase Bill"
     },
+    "item": "Select item",
     "titleNew": "New {doc}",
     "titleEdit": "Edit {doc}",
     "create": "Create {doc}",

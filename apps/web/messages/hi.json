@@ -82,7 +82,7 @@
       "ledgers": "बहीखाते",
       "banking": "बैंक",
       "reports": "रिपोर्ट",
-      "parties": "ग्राहक और विक्रेता",
+      "parties": "ग्राहक",
       "branches": "शाखाएं",
       "payroll": "पेरोल",
       "importData": "डेटा आयात करें",
@@ -2527,6 +2527,7 @@
       "purchaseOrder": "खरीद ऑर्डर",
       "purchaseBill": "खरीद बिल"
     },
+    "item": "वस्तु चुनें",
     "titleNew": "नया {doc}",
     "titleEdit": "{doc} संपादित करें",
     "create": "{doc} बनाएँ",

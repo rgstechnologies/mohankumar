@@ -95,7 +95,7 @@ const EMPTY: DraftLine = {
   itemId: '',
   description: '',
   quantity: '1',
-  rate: '',
+  rate: '0',
   discountPct: '0',
   gstRate: '0',
   batchNo: '',
@@ -678,38 +678,25 @@ export function DocEntryForm({
           {selectedCustomer && <PartyDetailsCard party={selectedCustomer} />}
         </section>
 
-        {/* Tax toggle (estimate) */}
-        {config.taxToggle && (
-          <label className="flex items-center gap-2 text-sm font-medium text-ink">
-            <input
-              type="checkbox"
-              checked={applyTax}
-              onChange={(e) => setApplyTax(e.target.checked)}
-              className="h-4 w-4 rounded border-line-strong"
-            />
-            {t('applyTax')}
-            <span className="font-normal text-faint">{t('applyTaxHint')}</span>
-          </label>
-        )}
 
         {/* Line items */}
         <section className="rounded-xl border border-line bg-surface p-5 shadow-sm shadow-slate-200/50">
           <div className="mb-2 text-sm font-semibold text-ink">{t('items')}</div>
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
+            <table className="w-full min-w-[500px] text-sm">
               <thead>
                 <tr className="border-b border-line text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
                   <th className="w-6 py-2">#</th>
-                  <th className="py-2">{t('colItem')}</th>
-                  <th className="w-20 py-2 text-right">{t('qty')}</th>
-                  <th className="w-14 py-2">{t('colUnit')}</th>
-                  <th className="w-24 py-2 text-right">
+                  <th className="py-2 w-70">{t('colItem')}</th>
+                  <th className="w-30 py-2 pl-8 text-left">{t('qty')}</th>
+                  <th className="w-20 py-2 pl-8">{t('colUnit')}</th>
+                  <th className="w-30 py-2 pl-8 text-left">
                     {t('colPrice')}
                     <span className="block text-[9px] font-normal normal-case text-faint">{t('withoutTax')}</span>
                   </th>
-                  <th className="w-16 py-2 text-right">{t('colDisc')}</th>
-                  {taxedLines && <th className="w-20 py-2 text-right">{t('colTax')}</th>}
-                  <th className="w-24 py-2 text-right">{t('colAmount')}</th>
+                  <th className="w-25 py-2 text-left pl-8">{t('colDisc')}</th>
+                  {taxedLines && <th className="w-20 py-2 text-left pl-8">{t('colTax')}</th>}
+                  <th className="w-24 py-2 text-left pl-8">{t('colAmount')}</th>
                   <th className="w-6 py-2" />
                 </tr>
               </thead>
@@ -724,11 +711,10 @@ export function DocEntryForm({
                         <Combobox
                           value={line.itemId}
                           onChange={(v) => updateLine(i, { itemId: v })}
-                          placeholder={t('freeText')}
+                          placeholder={t('item')}
                           searchPlaceholder={tc('search')}
                           className="w-full"
                           options={[
-                            { value: '', label: t('freeText') },
                             ...items.map((it) => ({
                               value: it.id,
                               label: it.name,
@@ -787,7 +773,7 @@ export function DocEntryForm({
                           </div>
                         )}
                       </td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 pl-8">
                         <Input
                           type="number"
                           step="0.001"
@@ -795,11 +781,11 @@ export function DocEntryForm({
                           required
                           value={line.quantity}
                           onChange={(e) => updateLine(i, { quantity: e.target.value })}
-                          className="w-full text-right"
+                          className="w-full text-left"
                         />
                       </td>
-                      <td className="py-1.5 pr-2 text-xs text-muted">{item?.unit ?? '—'}</td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 text-xs text-muted pl-8">{item?.unit ?? '—'}</td>
+                      <td className="py-1.5 pr-2 pl-8">
                         <Input
                           type="number"
                           step="0.01"
@@ -807,10 +793,10 @@ export function DocEntryForm({
                           required={!line.itemId}
                           value={line.rate}
                           onChange={(e) => updateLine(i, { rate: e.target.value })}
-                          className="w-full text-right"
+                          className="w-full text-left"
                         />
                       </td>
-                      <td className="py-1.5 pr-2">
+                      <td className="py-1.5 pr-2 pl-8">
                         <Input
                           type="number"
                           step="0.01"
@@ -819,11 +805,11 @@ export function DocEntryForm({
                           value={line.discountPct}
                           onChange={(e) => updateLine(i, { discountPct: e.target.value })}
                           placeholder="0"
-                          className="w-full text-right"
+                          className="w-full text-left"
                         />
                       </td>
                       {taxedLines && (
-                        <td className="py-1.5 pr-2">
+                        <td className="py-1.5 pr-2 pl-8">
                           {line.itemId ? (
                             <span className="block text-right text-xs text-muted">
                               {item ? Number(item.gstRate) : 0}%
@@ -841,10 +827,10 @@ export function DocEntryForm({
                           )}
                         </td>
                       )}
-                      <td className="py-1.5 text-right font-medium tabular-nums text-ink">
+                      <td className="py-1.5 pl-8 text-left font-medium tabular-nums text-ink">
                         ₹{inr(c.amount)}
                       </td>
-                      <td className="py-1.5 text-right">
+                      <td className="py-1.5 text-left">
                         {lines.length > 1 && (
                           <button
                             type="button"

@@ -35,16 +35,12 @@ import {
 import { api, ApiError, isAuthenticated, logout, type Me } from '@/lib/api';
 import { Pagination, SearchInput, useTable } from '@/components/table';
 import { LanguageSwitcher } from '@/components/language-switcher';
-import { NotesTab } from './notes-tab';
 import { InvoicesTab } from './invoices-tab';
 import { EstimatesTab } from './estimates-tab';
-import { ProfileTab } from './profile-tab';
-import { PrintSettingsTab } from './print-settings-tab';
 import { PaymentPage } from './payment-page';
 import { ItemsTab } from './items-tab';
 import { OverviewTab } from './overview-tab';
 import { PartiesTab } from './parties-tab';
-import { ActivityTab } from './activity-tab';
 import { PurchasesTab } from './purchases-tab';
 import { ReportsTab } from './reports-tab';
 import { StockTab } from './stock-tab';
@@ -60,13 +56,7 @@ type Tab =
   | 'stock'
   | 'items'
   | 'parties'
-  | 'notes'
-  | 'vouchers'
-  | 'ledgers'
   | 'reports'
-  | 'activity'
-  | 'print-settings'
-  | 'profile';
 
 function NavIcon({ name }: { name: Tab }) {
   const paths: Record<Tab, React.ReactNode> = {
@@ -92,21 +82,8 @@ function NavIcon({ name }: { name: Tab }) {
     parties: (
       <path d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
     ),
-    notes: (
-      <path d="M9 14l-4 4V5a2 2 0 012-2h10a2 2 0 012 2v9a2 2 0 01-2 2H9zM8 8h8M8 11h5" />
-    ),
-    vouchers: <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />,
-    ledgers: (
-      <path d="M12 6.5C10 5 7 5 4 6.5v13c3-1.5 6-1.5 8 0 2-1.5 5-1.5 8 0v-13c-3-1.5-6-1.5-8 0zM12 6.5v13" />
-    ),
     reports: <path d="M5 20v-6M10 20V8M15 20v-10M20 20V13M3 20h18" />,
-    activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
-    'print-settings': (
-      <path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-4a2 2 0 012-2h16a2 2 0 012 2v4a2 2 0 01-2 2h-2M6 14h12v7H6z" />
-    ),
-    profile: (
-      <path d="M3 21v-1a7 7 0 0114 0v1M10 11a4 4 0 100-8 4 4 0 000 8zM19 8v6M16 11h6" />
-    ),
+
   };
   return (
     <svg
@@ -154,24 +131,10 @@ const NAV_GROUPS: { group: string; items: { key: Tab; label: string }[] }[] = [
   {
     group: 'accounting',
     items: [
-      { key: 'notes', label: 'notes' },
-      // Vouchers + Ledgers stay: without them there is no way to record anything
-      // that isn't a sale or a purchase — rent, wages, electricity, bank charges,
-      // owner's capital. The reports are only as right as the ledger behind them.
-      { key: 'vouchers', label: 'vouchers' },
-      { key: 'ledgers', label: 'ledgers' },
       { key: 'reports', label: 'reports' },
     ],
   },
   { group: 'contacts', items: [{ key: 'parties', label: 'parties' }] },
-  {
-    group: 'settings',
-    items: [
-      { key: 'activity', label: 'activity' },
-      { key: 'print-settings', label: 'printSettings' },
-      { key: 'profile', label: 'profile' },
-    ],
-  },
 ];
 
 /** Top-bar account button with a dropdown (profile, admin, log out). */
@@ -272,15 +235,12 @@ export default function CompanyPage() {
       return next;
     });
   }, []);
-  const [groups, setGroups] = useState<AccountGroup[]>([]);
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
-  const [vouchers, setVouchers] = useState<VoucherView[]>([]);
   const [parties, setParties] = useState<PartyRow[]>([]);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [invoices, setInvoices] = useState<InvoiceView[]>([]);
   const [estimates, setEstimates] = useState<EstimateView[]>([]);
   const [bills, setBills] = useState<PurchaseBillView[]>([]);
-  const [notes, setNotes] = useState<NoteView[]>([]);
   const [stock, setStock] = useState<StockRow[]>([]);
 
   // Open a specific tab when arriving with ?tab=… (e.g. returning from a
@@ -304,16 +264,13 @@ export default function CompanyPage() {
       fetchStock(companyId),
       fetchNotes(companyId),
     ]);
-    setGroups(g);
     setLedgers(l);
-    setVouchers(v);
     setParties(p);
     setItems(i);
     setInvoices(inv);
     setEstimates(est);
     setBills(pb);
     setStock(st);
-    setNotes(nt);
   }, [companyId]);
 
   useEffect(() => {
@@ -349,11 +306,6 @@ export default function CompanyPage() {
       </main>
     );
   }
-
-  const canSee = (key: Tab) =>
-    (key !== 'activity' || isAdminRole) &&
-    (key !== 'print-settings' || isAdminRole) &&
-    (key !== 'profile' || isAdminRole);
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -404,7 +356,7 @@ export default function CompanyPage() {
 
         <nav className="scrollbar-light flex-1 space-y-4 overflow-y-auto px-2.5 py-3">
           {NAV_GROUPS.map((group) => {
-            const items = group.items.filter((item) => canSee(item.key));
+            const items = group.items;
             if (items.length === 0) return null;
             return (
               <div key={group.group || 'main'}>
@@ -585,36 +537,6 @@ export default function CompanyPage() {
             />
           )}
 
-          {tab === 'notes' && (
-            <NotesTab
-              companyId={companyId}
-              invoices={invoices}
-              bills={bills}
-              items={items}
-              notes={notes}
-              canManage={canManageLedgers}
-              onChanged={reload}
-            />
-          )}
-          {tab === 'vouchers' && (
-            <VouchersTab
-              companyId={companyId}
-              ledgers={ledgers}
-              vouchers={vouchers}
-              canPost={canPostVouchers}
-              canCancel={canManageLedgers}
-              onChanged={reload}
-            />
-          )}
-          {tab === 'ledgers' && (
-            <LedgersTab
-              companyId={companyId}
-              groups={groups}
-              ledgers={ledgers}
-              canManage={canManageLedgers}
-              onChanged={reload}
-            />
-          )}
           {tab === 'reports' && <ReportsTab companyId={companyId} />}
 
           {tab === 'parties' && (
@@ -627,13 +549,6 @@ export default function CompanyPage() {
             />
           )}
 
-          {tab === 'activity' && isAdminRole && <ActivityTab companyId={companyId} />}
-          {tab === 'print-settings' && isAdminRole && (
-            <PrintSettingsTab companyId={companyId} canManage={isAdminRole} />
-          )}
-          {tab === 'profile' && isAdminRole && (
-            <ProfileTab companyId={companyId} canManage={isAdminRole} />
-          )}
         </main>
       </div>
     </div>
