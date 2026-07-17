@@ -21,7 +21,7 @@ import {
 } from '@/lib/accounting';
 import { api, ApiError } from '@/lib/api';
 
-const METHODS = ['CASH', 'BANK', 'UPI', 'CARD', 'CHEQUE', 'OTHER'] as const;
+const METHODS = ['CASH', 'BANK'] as const;
 
 /** Which document kind a row settles against — drives the payment endpoint. */
 type DocKind = 'invoice' | 'bill' | 'estimate';
@@ -87,15 +87,20 @@ export function PaymentPage({
       ),
     [parties, partyType, docKind],
   );
-  const cashBank = useMemo(
-    () => ledgers.filter((l) => ['Cash-in-Hand', 'Bank Accounts'].includes(l.group.name)),
+  const cashLedger = useMemo(
+    () => ledgers.find((l) => l.group.name === 'Cash-in-Hand'),
     [ledgers],
   );
 
   const [partyId, setPartyId] = useState('');
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [method, setMethod] = useState<string>('CASH');
-  const [ledgerId, setLedgerId] = useState(cashBank[0]?.id ?? '');
+  const [ledgerId, setLedgerId] = useState('');
+  useEffect(() => {
+    if (cashLedger) {
+      setLedgerId(cashLedger.id);
+    }
+  }, [cashLedger]);
   const [reference, setReference] = useState('');
   const [alloc, setAlloc] = useState<Record<string, string>>({});
   const [advance, setAdvance] = useState('');
@@ -107,7 +112,7 @@ export function PaymentPage({
   const [banks, setBanks] = useState<BankAccountRow[]>([]);
   const [bankAccountId, setBankAccountId] = useState('');
   useEffect(() => {
-    fetchBanks(companyId).then(setBanks).catch(() => {});
+    fetchBanks(companyId).then(setBanks).catch(() => { });
   }, [companyId]);
   // The ledger actually used: the chosen bank's ledger when paying by Bank.
   const effectiveLedgerId =
@@ -392,7 +397,7 @@ export function PaymentPage({
               ))}
             </Select>
           </div>
-          {method === 'BANK' ? (
+          {method === 'BANK' && (
             <div>
               <Label>{t('bankAccount')}</Label>
               <Select value={bankAccountId} onChange={(e) => setBankAccountId(e.target.value)}>
@@ -408,17 +413,6 @@ export function PaymentPage({
               {banks.length === 0 && (
                 <p className="mt-1 text-[11px] text-amber-600">{t('noBanks')}</p>
               )}
-            </div>
-          ) : (
-            <div>
-              <Label>{t('depositTo')}</Label>
-              <Select value={ledgerId} onChange={(e) => setLedgerId(e.target.value)}>
-                {cashBank.map((l) => (
-                  <option key={l.id} value={l.id}>
-                    {l.name}
-                  </option>
-                ))}
-              </Select>
             </div>
           )}
           <div>

@@ -81,6 +81,7 @@ export function PartiesTab({
   );
 
   const [draft, setDraft] = useState<PartyDraft | null>(null);
+  const [mirrorAlias, setMirrorAlias] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [verifying, setVerifying] = useState(false);
@@ -161,6 +162,7 @@ export function PartiesTab({
 
   async function startEdit(party: PartyRow) {
     setError('');
+    setMirrorAlias(false);
     // Open immediately with what we have; the heavy base64 image is loaded next.
     setDraft({
       id: party.id,
@@ -217,6 +219,38 @@ export function PartiesTab({
     e.preventDefault();
     if (!draft) return;
     setError('');
+
+    if (draft.type === 'CUSTOMER') {
+      if (!draft.name.trim()) {
+        setError(t('nameRequired'));
+        return;
+      }
+      if (!draft.gstin.trim()) {
+        setError(t('gstinRequired'));
+        return;
+      }
+      if (!draft.phone.trim()) {
+        setError(t('phoneRequired'));
+        return;
+      }
+      if (!draft.state) {
+        setError(t('stateRequired'));
+        return;
+      }
+      if (!draft.addressLine1.trim()) {
+        setError(t('addressLine1Required'));
+        return;
+      }
+      if (!draft.city.trim()) {
+        setError(t('cityRequired'));
+        return;
+      }
+      if (!draft.pincode.trim()) {
+        setError(t('pincodeRequired'));
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       const common = {
@@ -279,7 +313,11 @@ export function PartiesTab({
               variant={draft && !editing ? 'secondary' : 'primary'}
               onClick={() => {
                 setError('');
-                setDraft(draft && !editing ? null : { ...EMPTY_DRAFT });
+                const nextDraft = draft && !editing ? null : { ...EMPTY_DRAFT };
+                setDraft(nextDraft);
+                if (nextDraft) {
+                  setMirrorAlias(true);
+                }
               }}
             >
               {draft && !editing ? tc('close') : t('newParty')}
@@ -360,25 +398,47 @@ export function PartiesTab({
               </div>
             )}
             <div className="sm:col-span-2">
-              <Label>{tc('name')}</Label>
+              <Label>
+                {tc('name')}
+                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+              </Label>
               <Input
                 required
                 value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                onChange={(e) => {
+                  const newName = e.target.value;
+                  setDraft((d) => {
+                    if (!d) return null;
+                    const patch: Partial<PartyDraft> = { name: newName };
+                    if (mirrorAlias) {
+                      patch.aliasName = newName;
+                    }
+                    return { ...d, ...patch };
+                  });
+                }}
+                onBlur={() => setMirrorAlias(false)}
               />
             </div>
             <div>
               <Label>{t('aliasOptional')}</Label>
               <Input
                 value={draft.aliasName}
-                onChange={(e) => setDraft({ ...draft, aliasName: e.target.value })}
+                onChange={(e) => {
+                  setDraft({ ...draft, aliasName: e.target.value });
+                  setMirrorAlias(false);
+                }}
               />
             </div>
             <div>
-              <Label>{t('gstinOptional')} <HelpTip text={t('gstinHelp')} /></Label>
+              <Label>
+                {draft.type === 'CUSTOMER' ? t('gstin') : t('gstinOptional')}{' '}
+                {draft.type === 'CUSTOMER' && <span className="text-red-500">*</span>}{' '}
+                <HelpTip text={t('gstinHelp')} />
+              </Label>
               <div className="flex gap-2">
                 <Input
                   className="flex-1"
+                  required={draft.type === 'CUSTOMER'}
                   value={draft.gstin}
                   maxLength={15}
                   onChange={(e) => setDraft({ ...draft, gstin: e.target.value.toUpperCase() })}
@@ -398,14 +458,21 @@ export function PartiesTab({
               </div>
             </div>
             <div>
-              <Label>{t('phoneOptional')}</Label>
+              <Label>
+                {draft.type === 'CUSTOMER' ? t('phone') : t('phoneOptional')}
+                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+              </Label>
               <Input
+                required={draft.type === 'CUSTOMER'}
                 value={draft.phone}
                 onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
               />
             </div>
             <div>
-              <Label>{t('stateLabel')}</Label>
+              <Label>
+                {t('stateLabel')}
+                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+              </Label>
               <Select
                 value={draft.state}
                 onChange={(e) => setDraft({ ...draft, state: e.target.value })}
@@ -428,8 +495,12 @@ export function PartiesTab({
               />
             </div>
             <div className="sm:col-span-2">
-              <Label>{t('addressLine1')}</Label>
+              <Label>
+                {t('addressLine1')}
+                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+              </Label>
               <Input
+                required={draft.type === 'CUSTOMER'}
                 value={draft.addressLine1}
                 onChange={(e) => setDraft({ ...draft, addressLine1: e.target.value })}
               />
@@ -442,15 +513,23 @@ export function PartiesTab({
               />
             </div>
             <div>
-              <Label>{t('cityOptional')}</Label>
+              <Label>
+                {draft.type === 'CUSTOMER' ? t('city') : t('cityOptional')}
+                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+              </Label>
               <Input
+                required={draft.type === 'CUSTOMER'}
                 value={draft.city}
                 onChange={(e) => setDraft({ ...draft, city: e.target.value })}
               />
             </div>
             <div>
-              <Label>{t('pincodeOptional')}</Label>
+              <Label>
+                {draft.type === 'CUSTOMER' ? t('pincode') : t('pincodeOptional')}
+                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+              </Label>
               <Input
+                required={draft.type === 'CUSTOMER'}
                 value={draft.pincode}
                 maxLength={6}
                 onChange={(e) =>
@@ -478,42 +557,44 @@ export function PartiesTab({
 
 
             {/* Photo / logo */}
-            <div className="sm:col-span-3">
-              <Label>{t('image.label')}</Label>
-              <div className="flex items-center gap-3">
-                {draft.image ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={draft.image}
-                    alt=""
-                    className="h-14 w-14 rounded-md border border-line object-cover"
-                  />
-                ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-line-strong text-[10px] text-faint">
-                    {t('image.none')}
-                  </div>
-                )}
-                <label className="cursor-pointer rounded-md border border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:bg-subtle">
-                  {t('image.choose')}
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    onChange={onImageFile}
-                    className="hidden"
-                  />
-                </label>
-                {draft.image && (
-                  <button
-                    type="button"
-                    onClick={() => setDraft({ ...draft, image: null })}
-                    className="text-xs font-medium text-red-500 hover:underline"
-                  >
-                    {t('image.remove')}
-                  </button>
-                )}
-                <span className="text-[11px] text-faint">{t('image.hint')}</span>
+            {draft.type !== 'CUSTOMER' && (
+              <div className="sm:col-span-3">
+                <Label>{t('image.label')}</Label>
+                <div className="flex items-center gap-3">
+                  {draft.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={draft.image}
+                      alt=""
+                      className="h-14 w-14 rounded-md border border-line object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-14 w-14 items-center justify-center rounded-md border border-dashed border-line-strong text-[10px] text-faint">
+                      {t('image.none')}
+                    </div>
+                  )}
+                  <label className="cursor-pointer rounded-md border border-line-strong px-3 py-1.5 text-xs font-medium text-muted hover:bg-subtle">
+                    {t('image.choose')}
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={onImageFile}
+                      className="hidden"
+                    />
+                  </label>
+                  {draft.image && (
+                    <button
+                      type="button"
+                      onClick={() => setDraft({ ...draft, image: null })}
+                      className="text-xs font-medium text-red-500 hover:underline"
+                    >
+                      {t('image.remove')}
+                    </button>
+                  )}
+                  <span className="text-[11px] text-faint">{t('image.hint')}</span>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="flex items-end gap-3 sm:col-span-3">
               <Button type="submit" disabled={busy}>
@@ -535,7 +616,10 @@ export function PartiesTab({
             body={t('emptyBody')}
             action={
               canManage && (
-                <Button onClick={() => setDraft({ ...EMPTY_DRAFT })}>{t('addParty')}</Button>
+                <Button onClick={() => {
+                  setDraft({ ...EMPTY_DRAFT });
+                  setMirrorAlias(true);
+                }}>{t('addParty')}</Button>
               )
             }
           />

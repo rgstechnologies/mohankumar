@@ -11,6 +11,10 @@ const STATS = [
   { k: 'All-in-one', v: 'books to billing' },
 ];
 
+const COMPANY_TITLE = process.env.NEXT_PUBLIC_COMPANY_TITLE || 'RGS Technologies';
+const COMPANY_SUBTITLE = process.env.NEXT_PUBLIC_COMPANY_SUBTITLE || 'Mohankumar';
+const COMPANY_LOGO_URL = process.env.NEXT_PUBLIC_COMPANY_LOGO_URL || '/rgs-logo.jpeg';
+
 /**
  * Premium split-screen auth layout: an animated RGS ERP brand/marketing panel
  * on the left (desktop) and the form on the right. Responsive (form-only on
@@ -46,8 +50,13 @@ export function AuthShell({
 
         <div className="relative z-10 flex items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/rgs-logo.jpeg" alt="RGS ERP" className="h-10 w-10 rounded-xl bg-white object-contain" />
-          <span className="text-xl font-bold tracking-tight">RGS ERP</span>
+          <img src={COMPANY_LOGO_URL} alt={COMPANY_TITLE} className="h-10 w-10 rounded-xl bg-white object-contain" />
+          <div className="flex flex-col">
+            <span className="text-xl font-bold tracking-tight leading-tight">{COMPANY_TITLE}</span>
+            {COMPANY_SUBTITLE && (
+              <span className="text-sm text-white font-medium mt-0.5">{COMPANY_SUBTITLE}</span>
+            )}
+          </div>
         </div>
 
         <div className="relative z-10 mt-auto">
@@ -109,8 +118,13 @@ export function AuthShell({
           >
             <div className="mb-6 flex items-center gap-2 lg:hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/rgs-logo.jpeg" alt="RGS ERP" className="h-9 w-9 rounded-xl bg-white object-contain" />
-              <span className="text-lg font-bold tracking-tight text-ink">RGS ERP</span>
+              <img src={COMPANY_LOGO_URL} alt={COMPANY_TITLE} className="h-9 w-9 rounded-xl bg-white object-contain" />
+              <div className="flex flex-col">
+                <span className="text-lg font-bold tracking-tight text-ink leading-tight">{COMPANY_TITLE}</span>
+                {COMPANY_SUBTITLE && (
+                  <span className="text-[10px] text-muted font-medium mt-0.5">{COMPANY_SUBTITLE}</span>
+                )}
+              </div>
             </div>
             <h1 className="text-2xl font-bold tracking-tight text-ink">{title}</h1>
             {subtitle && <p className="mt-1.5 text-sm text-muted">{subtitle}</p>}

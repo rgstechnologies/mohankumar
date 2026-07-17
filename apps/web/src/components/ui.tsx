@@ -154,7 +154,6 @@ export function Combobox({
     reposition();
     setQuery('');
     setActive(0);
-    requestAnimationFrame(() => (showSearch ? inputRef.current : panelRef.current)?.focus());
     const onDoc = (e: MouseEvent) => {
       const target = e.target as Node;
       if (!rootRef.current?.contains(target) && !panelRef.current?.contains(target)) {
@@ -173,6 +172,12 @@ export function Combobox({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // Focus the search input/panel after portal mounts (open && coords)
+  useEffect(() => {
+    if (!open || !coords) return;
+    requestAnimationFrame(() => (showSearch ? inputRef.current : panelRef.current)?.focus());
+  }, [open, coords, showSearch]);
+
   const choose = (o: ComboOption) => {
     onChange(o.value);
     setOpen(false);
@@ -181,16 +186,20 @@ export function Combobox({
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      e.stopPropagation();
       setActive((i) => Math.min(i + 1, filtered.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      e.stopPropagation();
       setActive((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      e.stopPropagation();
       const o = filtered[active];
       if (o) choose(o);
     } else if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopPropagation();
       setOpen(false);
     }
   };
