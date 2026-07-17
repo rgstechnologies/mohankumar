@@ -439,15 +439,11 @@ export function DocEntryForm({
           rate: line.rate ? Math.round(rateExcl * 100) / 100 : undefined,
           batchNo: line.batchNo || undefined,
           expiryDate: line.expiryDate || undefined,
+          discountPct: Number(line.discountPct) || 0,
+          // When "Apply tax" is off (or it is a tax-less document), force 0 on EVERY line
+          // (incl. item lines — otherwise the server falls back to the item's own GST rate).
+          gstRate: taxedLines ? (line.itemId ? undefined : Number(line.gstRate)) : 0,
         };
-        // Tax-less documents (e.g. purchase orders) take only qty/rate lines —
-        // their DTO rejects gstRate/discountPct, so never send them.
-        if (!config.noTax) {
-          payload.discountPct = Number(line.discountPct) || 0;
-          // When "Apply tax" is off, force 0 on EVERY line (incl. item lines —
-          // otherwise the server falls back to the item's own GST rate).
-          payload.gstRate = taxedLines ? (line.itemId ? undefined : Number(line.gstRate)) : 0;
-        }
         return payload;
       }),
     };
