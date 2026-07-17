@@ -77,20 +77,26 @@ export function StockTab({
         canManage={canManage}
         onStartEdit={startEdit}
       />
-      <StockUpdateModal
-        companyId={companyId}
-        isOpen={modalOpen}
-        initialStockRow={editingStock ? {
-          itemId: editingStock.itemId,
-          name: editingStock.name,
-          sku: editingStock.sku,
-          hsnCode: editingStock.hsnCode,
-          onHand: editingStock.onHand,
-        } : null}
-        items={items ?? []}
-        onSaved={handleModalSaved}
-        onClose={handleModalClose}
-      />
+      {modalOpen && (
+        <StockUpdateModal
+          companyId={companyId}
+          isOpen={modalOpen}
+          initialStockRow={
+            editingStock
+              ? {
+                  itemId: editingStock.itemId,
+                  name: editingStock.name,
+                  sku: editingStock.sku,
+                  hsnCode: editingStock.hsnCode,
+                  openingStock: editingStock.openingStock,
+                }
+              : null
+          }
+          items={items ?? []}
+          onSaved={handleModalSaved}
+          onClose={handleModalClose}
+        />
+      )}
     </div>
   );
 }

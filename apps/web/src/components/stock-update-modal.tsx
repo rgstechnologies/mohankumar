@@ -25,7 +25,7 @@ interface StockUpdateModalProps {
     name: string;
     sku: string | null;
     hsnCode: string | null;
-    onHand: number;
+    openingStock: number;
   } | null;
   items: ItemRow[];
   onSaved: () => void | Promise<void>;
@@ -48,7 +48,15 @@ export function StockUpdateModal({
   const tc = useTranslations('common');
   const { toast } = useFeedback();
 
-  const [draft, setDraft] = useState<StockUpdateDraft>(EMPTY_DRAFT);
+  const [draft, setDraft] = useState<StockUpdateDraft>(() => {
+    if (initialStockRow) {
+      return {
+        itemId: initialStockRow.itemId,
+        quantity: String(initialStockRow.openingStock),
+      };
+    }
+    return EMPTY_DRAFT;
+  });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -71,7 +79,7 @@ export function StockUpdateModal({
       if (initialStockRow) {
         setDraft({
           itemId: initialStockRow.itemId,
-          quantity: String(initialStockRow.onHand),
+          quantity: String(initialStockRow.openingStock),
         });
       } else {
         setDraft({ ...EMPTY_DRAFT });
@@ -97,7 +105,10 @@ export function StockUpdateModal({
   function handleItemSelect(itemId: string) {
     const item = items.find((i) => i.id === itemId);
     if (item) {
-      setDraft({ ...draft, itemId });
+      setDraft({
+        itemId,
+        quantity: String(item.openingStock),
+      });
     }
   }
 
