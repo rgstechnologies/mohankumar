@@ -1093,18 +1093,23 @@
     }
   },
   "stock": {
+    "searchPlaceholder": "Search by name, code, HSN…",
+    "updateStockButton": "Update Stock",
     "stockValue": "Stock value",
     "lowStockItems": "Low-stock items",
     "noItems": "No items yet.",
     "lowStockBadge": "LOW STOCK",
     "table": {
       "item": "Item",
+      "itemCode": "Code",
+      "hsn": "HSN",
       "opening": "Opening",
       "in": "In",
       "out": "Out",
       "onHand": "On hand",
       "avgRate": "Avg rate",
-      "value": "Value"
+      "value": "Value",
+      "update": "Update"
     },
     "batch": {
       "exp": "· exp {date}",
@@ -1138,7 +1143,21 @@
     "colNo": "No.",
     "colRoute": "From → To",
     "colItems": "Items",
-    "noTransfers": "No stock transfers yet. Move stock between branches to keep each location's count accurate."
+    "noTransfers": "No stock transfers yet. Move stock between branches to keep each location's count accurate.",
+    "modal": {
+      "title": "Update Stock",
+      "selectItem": "Select Item",
+      "selectItemPlaceholder": "Select an item…",
+      "searchPlaceholder": "Search by name, code, or HSN…",
+      "noItemsFound": "No items found",
+      "itemCode": "Item Code",
+      "hsn": "HSN",
+      "quantity": "Quantity",
+      "updateStock": "Update Stock",
+      "selectItemError": "Please select an item",
+      "quantityError": "Please enter a quantity",
+      "toastUpdated": "Stock updated"
+    }
   },
   "landing": {
     "nav": {
@@ -2555,6 +2574,10 @@
     "applyTaxHint": "Turn off for a tax-free estimate",
     "items": "Items",
     "freeText": "Free-text line",
+    "itemSearchPlaceholder": "Search by item name, code, or HSN…",
+    "noItemsFound": "No items found",
+    "itemOptionCode": "Code: {code}",
+    "itemOptionHsn": "HSN: {hsn}",
     "addCustomer": "+ Add customer",
     "addVendor": "+ Add vendor",
     "addItem": "+ Add item",
