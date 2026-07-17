@@ -2,49 +2,36 @@
 
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useFeedback } from '@/components/feedback';
 import { ThemeToggle } from '@/components/theme';
-import { Button, Card, ErrorText, HelpTip, Input, Label, Select } from '@/components/ui';
 import {
-  fetchGroups,
   fetchInvoices,
   fetchEstimates,
   fetchItems,
   fetchLedgers,
-  fetchNotes,
   fetchParties,
   fetchPurchaseBills,
   fetchStock,
-  fetchVouchers,
-  flattenGroups,
-  inr,
-  VOUCHER_TYPES,
-  type AccountGroup,
   type InvoiceView,
   type EstimateView,
   type ItemRow,
   type LedgerRow,
-  type NoteView,
   type PartyRow,
   type PurchaseBillView,
   type StockRow,
-  type VoucherView,
 } from '@/lib/accounting';
-import { api, ApiError, isAuthenticated, logout, type Me } from '@/lib/api';
-import { Pagination, SearchInput, useTable } from '@/components/table';
+import { api, isAuthenticated, logout, type Me } from '@/lib/api';
 import { LanguageSwitcher } from '@/components/language-switcher';
-import { NotesTab } from './notes-tab';
+
+const COMPANY_TITLE = process.env.NEXT_PUBLIC_COMPANY_TITLE || 'RGS Technologies';
+const COMPANY_LOGO_URL = process.env.NEXT_PUBLIC_COMPANY_LOGO_URL || '/rgs-logo.jpeg';
 import { InvoicesTab } from './invoices-tab';
 import { EstimatesTab } from './estimates-tab';
-import { ProfileTab } from './profile-tab';
-import { PrintSettingsTab } from './print-settings-tab';
 import { PaymentPage } from './payment-page';
 import { ItemsTab } from './items-tab';
 import { OverviewTab } from './overview-tab';
 import { PartiesTab } from './parties-tab';
-import { ActivityTab } from './activity-tab';
 import { PurchasesTab } from './purchases-tab';
 import { ReportsTab } from './reports-tab';
 import { StockTab } from './stock-tab';
@@ -60,13 +47,7 @@ type Tab =
   | 'stock'
   | 'items'
   | 'parties'
-  | 'notes'
-  | 'vouchers'
-  | 'ledgers'
   | 'reports'
-  | 'activity'
-  | 'print-settings'
-  | 'profile';
 
 function NavIcon({ name }: { name: Tab }) {
   const paths: Record<Tab, React.ReactNode> = {
@@ -92,21 +73,8 @@ function NavIcon({ name }: { name: Tab }) {
     parties: (
       <path d="M17 21v-2a4 4 0 00-4-4H7a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8zM23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" />
     ),
-    notes: (
-      <path d="M9 14l-4 4V5a2 2 0 012-2h10a2 2 0 012 2v9a2 2 0 01-2 2H9zM8 8h8M8 11h5" />
-    ),
-    vouchers: <path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01" />,
-    ledgers: (
-      <path d="M12 6.5C10 5 7 5 4 6.5v13c3-1.5 6-1.5 8 0 2-1.5 5-1.5 8 0v-13c-3-1.5-6-1.5-8 0zM12 6.5v13" />
-    ),
     reports: <path d="M5 20v-6M10 20V8M15 20v-10M20 20V13M3 20h18" />,
-    activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
-    'print-settings': (
-      <path d="M6 9V3h12v6M6 18H4a2 2 0 01-2-2v-4a2 2 0 012-2h16a2 2 0 012 2v4a2 2 0 01-2 2h-2M6 14h12v7H6z" />
-    ),
-    profile: (
-      <path d="M3 21v-1a7 7 0 0114 0v1M10 11a4 4 0 100-8 4 4 0 000 8zM19 8v6M16 11h6" />
-    ),
+
   };
   return (
     <svg
@@ -154,24 +122,10 @@ const NAV_GROUPS: { group: string; items: { key: Tab; label: string }[] }[] = [
   {
     group: 'accounting',
     items: [
-      { key: 'notes', label: 'notes' },
-      // Vouchers + Ledgers stay: without them there is no way to record anything
-      // that isn't a sale or a purchase — rent, wages, electricity, bank charges,
-      // owner's capital. The reports are only as right as the ledger behind them.
-      { key: 'vouchers', label: 'vouchers' },
-      { key: 'ledgers', label: 'ledgers' },
       { key: 'reports', label: 'reports' },
     ],
   },
   { group: 'contacts', items: [{ key: 'parties', label: 'parties' }] },
-  {
-    group: 'settings',
-    items: [
-      { key: 'activity', label: 'activity' },
-      { key: 'print-settings', label: 'printSettings' },
-      { key: 'profile', label: 'profile' },
-    ],
-  },
 ];
 
 /** Top-bar account button with a dropdown (profile, admin, log out). */
@@ -272,15 +226,12 @@ export default function CompanyPage() {
       return next;
     });
   }, []);
-  const [groups, setGroups] = useState<AccountGroup[]>([]);
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
-  const [vouchers, setVouchers] = useState<VoucherView[]>([]);
   const [parties, setParties] = useState<PartyRow[]>([]);
   const [items, setItems] = useState<ItemRow[]>([]);
   const [invoices, setInvoices] = useState<InvoiceView[]>([]);
   const [estimates, setEstimates] = useState<EstimateView[]>([]);
   const [bills, setBills] = useState<PurchaseBillView[]>([]);
-  const [notes, setNotes] = useState<NoteView[]>([]);
   const [stock, setStock] = useState<StockRow[]>([]);
 
   // Open a specific tab when arriving with ?tab=… (e.g. returning from a
@@ -292,28 +243,22 @@ export default function CompanyPage() {
   }, []);
 
   const reload = useCallback(async () => {
-    const [g, l, v, p, i, inv, est, pb, st, nt] = await Promise.all([
-      fetchGroups(companyId),
+    const [l, p, i, inv, est, pb, st] = await Promise.all([
       fetchLedgers(companyId),
-      fetchVouchers(companyId),
       fetchParties(companyId),
       fetchItems(companyId),
       fetchInvoices(companyId),
       fetchEstimates(companyId),
       fetchPurchaseBills(companyId),
       fetchStock(companyId),
-      fetchNotes(companyId),
     ]);
-    setGroups(g);
     setLedgers(l);
-    setVouchers(v);
     setParties(p);
     setItems(i);
     setInvoices(inv);
     setEstimates(est);
     setBills(pb);
     setStock(st);
-    setNotes(nt);
   }, [companyId]);
 
   useEffect(() => {
@@ -350,11 +295,6 @@ export default function CompanyPage() {
     );
   }
 
-  const canSee = (key: Tab) =>
-    (key !== 'activity' || isAdminRole) &&
-    (key !== 'print-settings' || isAdminRole) &&
-    (key !== 'profile' || isAdminRole);
-
   return (
     <div className="min-h-screen bg-canvas">
       {/* Mobile drawer scrim */}
@@ -375,9 +315,9 @@ export default function CompanyPage() {
         <div className="flex h-[70px] items-center gap-2.5 border-b border-line px-4">
           <Link href="/dashboard" className="flex min-w-0 items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/rgs-logo.jpeg" alt="RGS" className="h-9 w-9 shrink-0 rounded-xl bg-white object-contain shadow-sm" />
+            <img src={COMPANY_LOGO_URL} alt={COMPANY_TITLE} className="h-9 w-9 shrink-0 rounded-xl bg-white object-contain shadow-sm" />
             {!collapsed && (
-              <span className="truncate text-lg font-bold tracking-tight text-ink">RGS</span>
+              <span className="truncate text-lg font-bold tracking-tight text-ink">{COMPANY_TITLE}</span>
             )}
           </Link>
           <button
@@ -404,7 +344,7 @@ export default function CompanyPage() {
 
         <nav className="scrollbar-light flex-1 space-y-4 overflow-y-auto px-2.5 py-3">
           {NAV_GROUPS.map((group) => {
-            const items = group.items.filter((item) => canSee(item.key));
+            const items = group.items;
             if (items.length === 0) return null;
             return (
               <div key={group.group || 'main'}>
@@ -585,36 +525,6 @@ export default function CompanyPage() {
             />
           )}
 
-          {tab === 'notes' && (
-            <NotesTab
-              companyId={companyId}
-              invoices={invoices}
-              bills={bills}
-              items={items}
-              notes={notes}
-              canManage={canManageLedgers}
-              onChanged={reload}
-            />
-          )}
-          {tab === 'vouchers' && (
-            <VouchersTab
-              companyId={companyId}
-              ledgers={ledgers}
-              vouchers={vouchers}
-              canPost={canPostVouchers}
-              canCancel={canManageLedgers}
-              onChanged={reload}
-            />
-          )}
-          {tab === 'ledgers' && (
-            <LedgersTab
-              companyId={companyId}
-              groups={groups}
-              ledgers={ledgers}
-              canManage={canManageLedgers}
-              onChanged={reload}
-            />
-          )}
           {tab === 'reports' && <ReportsTab companyId={companyId} />}
 
           {tab === 'parties' && (
@@ -627,462 +537,10 @@ export default function CompanyPage() {
             />
           )}
 
-          {tab === 'activity' && isAdminRole && <ActivityTab companyId={companyId} />}
-          {tab === 'print-settings' && isAdminRole && (
-            <PrintSettingsTab companyId={companyId} canManage={isAdminRole} />
-          )}
-          {tab === 'profile' && isAdminRole && (
-            <ProfileTab companyId={companyId} canManage={isAdminRole} />
-          )}
         </main>
       </div>
     </div>
   );
 }
 
-// ----------------------------------------------------------------
-// Ledgers
-// ----------------------------------------------------------------
 
-function LedgersTab({
-  companyId,
-  groups,
-  ledgers,
-  canManage,
-  onChanged,
-}: {
-  companyId: string;
-  groups: AccountGroup[];
-  ledgers: LedgerRow[];
-  canManage: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const t = useTranslations('ledgers');
-  const tc = useTranslations('common');
-  const groupOptions = useMemo(() => flattenGroups(groups), [groups]);
-  const ledgerTable = useTable(ledgers, (l) => `${l.name} ${l.group.name}`);
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState('');
-  const [groupId, setGroupId] = useState('');
-  const [opening, setOpening] = useState('');
-  const [openingType, setOpeningType] = useState<'DEBIT' | 'CREDIT'>('DEBIT');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  async function onCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-    setBusy(true);
-    try {
-      await api.post(`/companies/${companyId}/ledgers`, {
-        name,
-        groupId,
-        openingBalance: opening ? Number(opening) : undefined,
-        openingType,
-      });
-      setName('');
-      setOpening('');
-      setShowForm(false);
-      await onChanged();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : tc('somethingWentWrong'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SearchInput
-          value={ledgerTable.query}
-          onChange={ledgerTable.setQuery}
-          placeholder={t('searchPlaceholder')}
-        />
-        {canManage && (
-          <Button
-            variant={showForm ? 'secondary' : 'primary'}
-            onClick={() => setShowForm(!showForm)}
-          >
-            {showForm ? tc('close') : t('newLedger')}
-          </Button>
-        )}
-      </div>
-
-      {showForm && (
-        <Card>
-          <form onSubmit={onCreate} className="grid grid-cols-1 items-end gap-4 sm:grid-cols-5">
-            <div className="sm:col-span-2">
-              <Label>{t('ledgerName')}</Label>
-              <Input required value={name} onChange={(e) => setName(e.target.value)} />
-            </div>
-            <div>
-              <Label>{t('group')}</Label>
-              <Select required value={groupId} onChange={(e) => setGroupId(e.target.value)}>
-                <option value="">{t('select')}</option>
-                {groupOptions.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>{t('openingBalance')}</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={opening}
-                onChange={(e) => setOpening(e.target.value)}
-                placeholder="0.00"
-              />
-            </div>
-            <div className="flex gap-2">
-              <Select
-                value={openingType}
-                onChange={(e) => setOpeningType(e.target.value as 'DEBIT' | 'CREDIT')}
-              >
-                <option value="DEBIT">{tc('dr')}</option>
-                <option value="CREDIT">{tc('cr')}</option>
-              </Select>
-              <Button type="submit" disabled={busy}>
-                {busy ? '…' : tc('add')}
-              </Button>
-            </div>
-            <div className="sm:col-span-5">
-              <ErrorText>{error}</ErrorText>
-            </div>
-          </form>
-        </Card>
-      )}
-
-      <Card>
-        <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-sm">
-          <thead>
-            <tr className="border-b border-line bg-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-              <th className="py-2">{t('colLedger')}</th>
-              <th className="py-2">{t('colGroup')}</th>
-              <th className="py-2 text-right">{tc('balance')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ledgerTable.rows.map((l) => (
-              <tr key={l.id} className="border-b border-line last:border-0 hover:bg-subtle">
-                <td className="py-2 font-medium">
-                  {l.name}
-                  {l.isSystem && (
-                    <span className="ml-2 rounded bg-subtle px-1.5 py-0.5 text-[10px] text-muted">
-                      {t('system')}
-                    </span>
-                  )}
-                </td>
-                <td className="py-2 text-muted">{l.group.name}</td>
-                <td className="py-2 text-right tabular-nums">
-                  ₹{inr(l.balance)}{' '}
-                  <span className="text-xs text-faint">
-                    {l.balanceType === 'DEBIT' ? tc('dr') : tc('cr')}
-                  </span>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table></div>
-        <Pagination
-          page={ledgerTable.page}
-          pageCount={ledgerTable.pageCount}
-          total={ledgerTable.total}
-          onPage={ledgerTable.setPage}
-        />
-      </Card>
-    </div>
-  );
-}
-
-// ----------------------------------------------------------------
-// Vouchers
-// ----------------------------------------------------------------
-
-interface DraftLine {
-  ledgerId: string;
-  type: 'DEBIT' | 'CREDIT';
-  amount: string;
-}
-
-const EMPTY_LINE: DraftLine = { ledgerId: '', type: 'DEBIT', amount: '' };
-
-function VouchersTab({
-  companyId,
-  ledgers,
-  vouchers,
-  canPost,
-  canCancel,
-  onChanged,
-}: {
-  companyId: string;
-  ledgers: LedgerRow[];
-  vouchers: VoucherView[];
-  canPost: boolean;
-  canCancel: boolean;
-  onChanged: () => Promise<void>;
-}) {
-  const t = useTranslations('vouchers');
-  const tc = useTranslations('common');
-  const { toast, confirm } = useFeedback();
-  const voucherTable = useTable(
-    vouchers,
-    (v) => `${v.voucherNo} ${v.type} ${v.narration ?? ''} ${v.lines.map((l) => l.ledgerName).join(' ')}`,
-  );
-  const [showForm, setShowForm] = useState(false);
-  const [type, setType] = useState<string>('JOURNAL');
-  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [narration, setNarration] = useState('');
-  const [lines, setLines] = useState<DraftLine[]>([
-    { ...EMPTY_LINE },
-    { ...EMPTY_LINE, type: 'CREDIT' },
-  ]);
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-  const totals = useMemo(() => {
-    let debit = 0;
-    let credit = 0;
-    for (const line of lines) {
-      const amount = Number(line.amount) || 0;
-      if (line.type === 'DEBIT') debit += amount;
-      else credit += amount;
-    }
-    return { debit, credit, balanced: debit > 0 && Math.abs(debit - credit) < 0.005 };
-  }, [lines]);
-
-  function updateLine(index: number, patch: Partial<DraftLine>) {
-    setLines((prev) => prev.map((l, i) => (i === index ? { ...l, ...patch } : l)));
-  }
-
-  async function onPost(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-    setBusy(true);
-    try {
-      await api.post(`/companies/${companyId}/vouchers`, {
-        type,
-        date,
-        narration: narration || undefined,
-        lines: lines.map((l) => ({
-          ledgerId: l.ledgerId,
-          type: l.type,
-          amount: Number(l.amount),
-        })),
-      });
-      setNarration('');
-      setLines([{ ...EMPTY_LINE }, { ...EMPTY_LINE, type: 'CREDIT' }]);
-      setShowForm(false);
-      await onChanged();
-      toast(t('posted'));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : tc('somethingWentWrong'));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function onCancel(voucherId: string) {
-    const ok = await confirm({
-      title: t('cancelTitle'),
-      body: t('cancelBody'),
-      confirmLabel: t('cancelConfirm'),
-      danger: true,
-    });
-    if (!ok) return;
-    await api.post(`/companies/${companyId}/vouchers/${voucherId}/cancel`);
-    await onChanged();
-    toast(t('cancelled'), 'info');
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <SearchInput
-          value={voucherTable.query}
-          onChange={voucherTable.setQuery}
-          placeholder={t('searchPlaceholder')}
-        />
-        {canPost && (
-          <Button
-            variant={showForm ? 'secondary' : 'primary'}
-            onClick={() => setShowForm(!showForm)}
-          >
-            {showForm ? tc('close') : t('newVoucher')}
-          </Button>
-        )}
-      </div>
-
-      {showForm && (
-        <Card>
-          <form onSubmit={onPost} className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div>
-                <Label>{tc('type')}</Label>
-                <Select value={type} onChange={(e) => setType(e.target.value)}>
-                  {VOUCHER_TYPES.map((vt) => (
-                    <option key={vt} value={vt}>
-                      {t(`types.${vt}`)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div>
-                <Label>{tc('date')}</Label>
-                <Input type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div>
-                <Label>{t('narration')}</Label>
-                <Input
-                  value={narration}
-                  onChange={(e) => setNarration(e.target.value)}
-                  placeholder={t('narrationPlaceholder')}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {lines.map((line, i) => (
-                <div key={i} className="flex flex-wrap items-center gap-2">
-                  <Select
-                    required
-                    value={line.ledgerId}
-                    onChange={(e) => updateLine(i, { ledgerId: e.target.value })}
-                    className="min-w-48 flex-1"
-                  >
-                    <option value="">{t('selectLedger')}</option>
-                    {ledgers.map((l) => (
-                      <option key={l.id} value={l.id}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </Select>
-                  <Select
-                    value={line.type}
-                    onChange={(e) => updateLine(i, { type: e.target.value as 'DEBIT' | 'CREDIT' })}
-                    className="w-20"
-                  >
-                    <option value="DEBIT">{tc('dr')}</option>
-                    <option value="CREDIT">{tc('cr')}</option>
-                  </Select>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    required
-                    value={line.amount}
-                    onChange={(e) => updateLine(i, { amount: e.target.value })}
-                    placeholder={tc('amount')}
-                    className="w-32"
-                  />
-                  {lines.length > 2 && (
-                    <button
-                      type="button"
-                      onClick={() => setLines((prev) => prev.filter((_, j) => j !== i))}
-                      className="text-faint hover:text-red-500"
-                      aria-label={t('removeLine')}
-                    >
-                      ✕
-                    </button>
-                  )}
-                </div>
-              ))}
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => setLines((prev) => [...prev, { ...EMPTY_LINE }])}
-              >
-                {t('addLine')}
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between border-t border-line pt-3 text-sm">
-              <span className="tabular-nums">
-                {tc('dr')} ₹{inr(totals.debit)} · {tc('cr')} ₹{inr(totals.credit)}
-                <HelpTip text={t('helpDoubleEntry')} />{' '}
-                {totals.balanced ? (
-                  <span className="text-emerald-600">{t('balanced')}</span>
-                ) : (
-                  <span className="text-amber-600">{t('notBalanced')}</span>
-                )}
-              </span>
-              <Button type="submit" disabled={busy || !totals.balanced}>
-                {busy ? t('posting') : t('postVoucher')}
-              </Button>
-            </div>
-            <ErrorText>{error}</ErrorText>
-          </form>
-        </Card>
-      )}
-
-      <Card>
-        {vouchers.length === 0 ? (
-          <p className="text-sm text-muted">{t('noVouchers')}</p>
-        ) : (
-          <div className="overflow-x-auto"><table className="w-full min-w-[600px] text-sm">
-            <thead>
-              <tr className="border-b border-line bg-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                <th className="py-2">{t('colNo')}</th>
-                <th className="py-2">{tc('date')}</th>
-                <th className="py-2">{t('colParticulars')}</th>
-                <th className="py-2 text-right">{tc('amount')}</th>
-                <th className="py-2 text-right">{tc('status')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {voucherTable.rows.map((v) => (
-                <tr key={v.id} className="border-b border-line align-top last:border-0 hover:bg-subtle">
-                  <td className="py-2 font-mono text-xs">{v.voucherNo}</td>
-                  <td className="py-2 whitespace-nowrap">
-                    {new Date(v.date).toLocaleDateString('en-IN')}
-                  </td>
-                  <td className="py-2">
-                    <div className="space-y-0.5">
-                      {v.lines.map((l) => (
-                        <div key={l.lineNo} className="text-xs">
-                          <span className={l.type === 'CREDIT' ? 'pl-4' : ''}>
-                            {l.ledgerName}{' '}
-                            <span className="text-faint">
-                              {l.type === 'DEBIT' ? tc('dr') : tc('cr')} ₹{inr(l.amount)}
-                            </span>
-                          </span>
-                        </div>
-                      ))}
-                      {v.narration && (
-                        <p className="text-xs italic text-faint">{v.narration}</p>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-2 text-right tabular-nums">₹{inr(v.totalAmount)}</td>
-                  <td className="py-2 text-right">
-                    {v.status === 'CANCELLED' ? (
-                      <span className="text-xs text-red-500">{tc('cancelled')}</span>
-                    ) : canCancel ? (
-                      <button
-                        onClick={() => onCancel(v.id)}
-                        className="text-xs text-faint hover:text-red-500"
-                      >
-                        {t('cancelAction')}
-                      </button>
-                    ) : (
-                      <span className="text-xs text-emerald-600">{tc('active')}</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table></div>
-        )}
-        <Pagination
-          page={voucherTable.page}
-          pageCount={voucherTable.pageCount}
-          total={voucherTable.total}
-          onPage={voucherTable.setPage}
-        />
-      </Card>
-    </div>
-  );
-}

@@ -70,8 +70,8 @@
     "nav": {
       "overview": "Overview",
       "pos": "Point of Sale",
-      "invoices": "Sales Invoices",
-      "estimates": "Estimates",
+      "invoices": "Sales Bills",
+      "estimates": "Estimate Bills",
       "purchaseOrders": "Purchase Orders",
       "purchases": "Purchases",
       "purchaseEstimates": "Purchase Estimates",
@@ -82,7 +82,7 @@
       "ledgers": "Ledgers",
       "banking": "Banks",
       "reports": "Reports",
-      "parties": "Customers & Vendors",
+      "parties": "Customers",
       "branches": "Branches",
       "payroll": "Payroll",
       "importData": "Import data",
@@ -98,14 +98,14 @@
       "printSettings": "Print Settings",
       "paymentIn": "Payment In",
       "paymentOut": "Payment Out",
-      "estimatePayments": "Estimate Banking",
-      "invoicePayments": "Invoice Banking"
+      "estimatePayments": "Estimate Payment-In",
+      "invoicePayments": "Invoice Payment-In"
     },
     "titles": {
       "overview": "Overview",
       "pos": "Point of Sale",
-      "invoices": "Sales Invoices",
-      "estimates": "Estimates",
+      "invoices": "Sales Bills",
+      "estimates": "Estimate Bills",
       "purchases": "Purchase Bills",
       "purchase-estimates": "Purchase Estimates",
       "stock": "Stock",
@@ -132,8 +132,8 @@
       "print-settings": "Print Settings",
       "payment-in": "Payment In",
       "payment-out": "Payment Out",
-      "estimate-payments": "Estimate Banking",
-      "invoice-payments": "Invoice Banking"
+      "estimate-payments": "Estimate Payment-In",
+      "invoice-payments": "Invoice Payment-In"
     },
     "roles": {
       "OWNER": "Owner",
@@ -1156,7 +1156,7 @@
     "preview": {
       "menu": {
         "overview": "Overview",
-        "salesInvoices": "Sales Invoices",
+        "salesInvoices": "Sales Bills",
         "purchases": "Purchases",
         "stock": "Stock",
         "reports": "Reports"
@@ -1308,7 +1308,7 @@
     "payables": "Payables",
     "lowStockItems": "Low-stock items",
     "recentInvoices": "Recent invoices",
-    "noInvoicesYet": "No invoices yet — create your first one from Sales Invoices."
+    "noInvoicesYet": "No invoices yet — create your first one from Sales Bills."
   },
   "parties": {
     "searchPlaceholder": "Search by name, GSTIN, city…",
@@ -1324,6 +1324,7 @@
     "gstinOptional": "GSTIN (optional)",
     "gstinHelp": "15-character GST registration number. The first 2 digits are the state code — RGS uses it to decide CGST+SGST (same state) vs IGST (other state) on invoices.",
     "phoneOptional": "Phone (optional)",
+    "phone": "Phone",
     "cityOptional": "City (optional)",
     "aliasOptional": "Alias / short name",
     "stateLabel": "State",
@@ -1331,6 +1332,7 @@
     "addressLine1": "Address line 1",
     "addressLine2": "Address line 2",
     "pincodeOptional": "Pincode",
+    "pincode": "Pincode",
     "addCustomerTitle": "Add customer",
     "addVendorTitle": "Add vendor",
     "openingBalance": "Opening balance",
@@ -2527,6 +2529,7 @@
       "purchaseOrder": "Purchase Order",
       "purchaseBill": "Purchase Bill"
     },
+    "item": "Select item",
     "titleNew": "New {doc}",
     "titleEdit": "Edit {doc}",
     "create": "Create {doc}",
