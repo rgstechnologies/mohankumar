@@ -1,6 +1,6 @@
 'use client';
 
-import { Children, isValidElement, useEffect, useMemo, useRef, useState } from 'react';
+import { Children, isValidElement, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 /** Flatten a React node into its plain-text content (for option labels). */
@@ -72,6 +72,8 @@ export interface ComboOption {
   label: string;
   /** Optional muted secondary text shown on the right (e.g. GSTIN, balance). */
   hint?: string;
+  /** Optional extra keywords included in search matching. */
+  keywords?: string;
 }
 
 /**
@@ -88,6 +90,8 @@ export function Combobox({
   emptyText = 'No matches',
   disabled = false,
   className = '',
+  twoLine = false,
+  showSearch: showSearchProp,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -97,6 +101,8 @@ export function Combobox({
   emptyText?: string;
   disabled?: boolean;
   className?: string;
+  twoLine?: boolean;
+  showSearch?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -105,17 +111,27 @@ export function Combobox({
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
 
   const selected = options.find((o) => o.value === value) ?? null;
-  const showSearch = options.length > 6;
+  const showSearch = showSearchProp ?? options.length > 6;
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return options;
     return options.filter((o) =>
-      `${o.label} ${o.hint ?? ''}`.toLowerCase().includes(q),
+      `${o.label} ${o.hint ?? ''} ${o.keywords ?? ''}`.toLowerCase().includes(q),
     );
   }, [options, query]);
+
+  const shouldVirtualize = filtered.length > 80;
+  const optionRowHeight = twoLine ? 56 : 40;
+  const visibleCount = shouldVirtualize ? 10 : filtered.length;
+  const startIndex = shouldVirtualize ? Math.max(0, active - 4) : 0;
+  const endIndex = shouldVirtualize ? Math.min(filtered.length, startIndex + visibleCount) : filtered.length;
+  const visibleOptions = filtered.slice(startIndex, endIndex);
+  const topSpacer = shouldVirtualize ? startIndex * optionRowHeight : 0;
+  const bottomSpacer = shouldVirtualize ? (filtered.length - endIndex) * optionRowHeight : 0;
 
   // Position the menu in fixed/viewport coords so it escapes any overflow
   // (the line-items table scrolls horizontally and would otherwise clip it).
@@ -126,6 +142,12 @@ export function Combobox({
     const left = Math.max(8, Math.min(r.left, window.innerWidth - width - 8));
     setCoords({ top: r.bottom + 4, left, width });
   };
+
+  useEffect(() => {
+    if (!open || !panelRef.current) return;
+    const activeEl = panelRef.current.querySelector<HTMLElement>(`[data-option-index="${active}"]`);
+    activeEl?.scrollIntoView({ block: 'nearest' });
+  }, [active, open, filtered.length]);
 
   useEffect(() => {
     if (!open) return;
@@ -179,9 +201,27 @@ export function Combobox({
         type="button"
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        role="combobox"
+        aria-expanded={open}
+        aria-controls={listId}
+        aria-haspopup="listbox"
+        aria-activedescendant={open && filtered[active] ? `${listId}-option-${active}` : undefined}
         className={`flex w-full items-center justify-between gap-2 rounded-lg border border-line-strong bg-surface px-3 py-2 text-left text-sm outline-none transition-colors focus:border-brand-600 focus:ring-2 focus:ring-brand-100 disabled:bg-subtle ${selected ? 'text-ink' : 'text-faint'}`}
       >
-        <span className="truncate">{selected ? selected.label : placeholder}</span>
+        <span className={`min-w-0 ${twoLine && selected?.hint ? 'flex flex-col items-start' : 'truncate'}`}>
+          <span className={`truncate ${twoLine ? 'font-medium text-ink' : ''}`}>
+            {selected ? selected.label : placeholder}
+          </span>
+          {twoLine && selected?.hint && (
+            <span className="truncate text-xs text-muted">{selected.hint}</span>
+          )}
+        </span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="shrink-0 text-faint">
           <path d="m6 9 6 6 6-6" />
         </svg>
@@ -209,27 +249,40 @@ export function Combobox({
                   }}
                   onKeyDown={handleKey}
                   placeholder={searchPlaceholder}
+                  role="searchbox"
+                  aria-controls={listId}
                   className="w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-sm text-ink outline-none focus:border-brand-600"
                 />
               </div>
             )}
-            <ul className="max-h-60 overflow-y-auto py-1">
+            <ul id={listId} role="listbox" className="max-h-60 overflow-y-auto py-1">
               {filtered.length === 0 ? (
                 <li className="px-3 py-2 text-sm text-faint">{emptyText}</li>
               ) : (
-                filtered.map((o, i) => (
-                  <li key={o.value}>
-                    <button
-                      type="button"
-                      onMouseEnter={() => setActive(i)}
-                      onClick={() => choose(o)}
-                      className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm ${i === active ? 'bg-brand-50 text-brand-700' : 'text-ink'} ${o.value === value ? 'font-semibold' : ''}`}
-                    >
-                      <span className="truncate">{o.label}</span>
-                      {o.hint && <span className="shrink-0 text-xs text-faint">{o.hint}</span>}
-                    </button>
-                  </li>
-                ))
+                <>
+                  {topSpacer > 0 && <li aria-hidden="true" style={{ height: topSpacer }} />}
+                  {visibleOptions.map((o, visibleIndex) => {
+                    const i = startIndex + visibleIndex;
+                    return (
+                      <li key={o.value}>
+                        <button
+                          type="button"
+                          id={`${listId}-option-${i}`}
+                          role="option"
+                          aria-selected={o.value === value}
+                          data-option-index={i}
+                          onMouseEnter={() => setActive(i)}
+                          onClick={() => choose(o)}
+                          className={`flex w-full items-start gap-2 px-3 py-2 text-left text-sm ${i === active ? 'bg-brand-50 text-brand-700' : 'text-ink'} ${o.value === value ? 'font-semibold' : ''} ${twoLine ? 'flex-col' : 'justify-between'}`}
+                        >
+                          <span className={`truncate ${twoLine ? 'font-medium text-ink' : ''}`}>{o.label}</span>
+                          {o.hint && <span className={`shrink-0 text-xs text-muted ${twoLine ? 'mt-0.5' : ''}`}>{o.hint}</span>}
+                        </button>
+                      </li>
+                    );
+                  })}
+                  {bottomSpacer > 0 && <li aria-hidden="true" style={{ height: bottomSpacer }} />}
+                </>
               )}
             </ul>
           </div>,

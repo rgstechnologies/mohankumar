@@ -1,8 +1,10 @@
 'use client';
 
-import { Fragment } from 'react';import { useTranslations } from 'next-intl';
-import { ExportButtons } from '@/components/table';
-import { Card } from '@/components/ui';
+import { useState, Fragment } from 'react';
+import { useTranslations } from 'next-intl';
+import { SearchInput, useTable } from '@/components/table';
+import { Button, Card } from '@/components/ui';
+import { StockUpdateModal } from '@/components/stock-update-modal';
 import { inr, type ItemRow, type StockRow } from '@/lib/accounting';
 
 /**
@@ -17,6 +19,9 @@ import { inr, type ItemRow, type StockRow } from '@/lib/accounting';
 export function StockTab({
   companyId,
   stock,
+  items,
+  canManage = true,
+  onChanged,
 }: {
   companyId: string;
   stock: StockRow[];
@@ -24,12 +29,68 @@ export function StockTab({
   canManage?: boolean;
   onChanged?: () => Promise<void>;
 }) {
+  const t = useTranslations('stock');
+  const table = useTable(stock, (s) => `${s.name} ${s.sku ?? ''} ${s.hsnCode ?? ''}`);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingStock, setEditingStock] = useState<StockRow | null>(null);
+
+  function startEdit(stockRow: StockRow) {
+    setEditingStock(stockRow);
+    setModalOpen(true);
+  }
+
+  async function handleModalSaved() {
+    setEditingStock(null);
+    if (onChanged) await onChanged();
+  }
+
+  function handleModalClose() {
+    setModalOpen(false);
+    setEditingStock(null);
+  }
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <ExportButtons companyId={companyId} report="stock" />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SearchInput
+          value={table.query}
+          onChange={table.setQuery}
+          placeholder={t('searchPlaceholder')}
+        />
+        <div className="flex items-center gap-3">
+          {canManage && (
+            <Button
+              variant="primary"
+              onClick={() => {
+                setEditingStock(null);
+                setModalOpen(true);
+              }}
+            >
+              {t('updateStockButton')}
+            </Button>
+          )}
+        </div>
       </div>
-      <CompanyStock companyId={companyId} stock={stock} />
+      <CompanyStock 
+        companyId={companyId} 
+        stock={table.rows} 
+        canManage={canManage}
+        onStartEdit={startEdit}
+      />
+      <StockUpdateModal
+        companyId={companyId}
+        isOpen={modalOpen}
+        initialStockRow={editingStock ? {
+          itemId: editingStock.itemId,
+          name: editingStock.name,
+          sku: editingStock.sku,
+          hsnCode: editingStock.hsnCode,
+          onHand: editingStock.onHand,
+        } : null}
+        items={items ?? []}
+        onSaved={handleModalSaved}
+        onClose={handleModalClose}
+      />
     </div>
   );
 }
@@ -38,8 +99,19 @@ export function StockTab({
 // Stock on hand
 // ----------------------------------------------------------------
 
-function CompanyStock({ companyId, stock }: { companyId: string; stock: StockRow[] }) {
+function CompanyStock({ 
+  companyId, 
+  stock, 
+  canManage, 
+  onStartEdit 
+}: { 
+  companyId: string; 
+  stock: StockRow[];
+  canManage?: boolean;
+  onStartEdit?: (stockRow: StockRow) => void;
+}) {
   const t = useTranslations('stock');
+  const tc = useTranslations('common');
   const totalValue = stock.reduce((sum, s) => sum + s.stockValue, 0);
   const lowStockCount = stock.filter((s) => s.lowStock).length;
   void companyId;
@@ -65,84 +137,98 @@ function CompanyStock({ companyId, stock }: { companyId: string; stock: StockRow
         {stock.length === 0 ? (
           <p className="text-sm text-muted">{t('noItems')}</p>
         ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-line bg-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-                <th className="py-2">{t('table.item')}</th>
-                <th className="py-2 text-right">{t('table.opening')}</th>
-                <th className="py-2 text-right">{t('table.in')}</th>
-                <th className="py-2 text-right">{t('table.out')}</th>
-                <th className="py-2 text-right">{t('table.onHand')}</th>
-                <th className="py-2 text-right">{t('table.avgRate')}</th>
-                <th className="py-2 text-right">{t('table.value')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {stock.map((row) => (
-                <Fragment key={row.itemId}>
-                <tr className="border-b border-line last:border-0 hover:bg-subtle">
-                  <td className="py-2 font-medium">
-                    {row.name}
-                    {row.lowStock && (
-                      <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                        {t('lowStockBadge')}
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-2 text-right tabular-nums">
-                    {row.openingStock} {row.unit}
-                  </td>
-                  <td className="py-2 text-right tabular-nums text-emerald-600">
-                    +{row.purchasedQty}
-                  </td>
-                  <td className="py-2 text-right tabular-nums text-red-500">
-                    −{row.soldQty}
-                  </td>
-                  <td className="py-2 text-right font-semibold tabular-nums">
-                    {row.onHand} {row.unit}
-                  </td>
-                  <td className="py-2 text-right tabular-nums">₹{inr(row.avgRate)}</td>
-                  <td className="py-2 text-right tabular-nums">₹{inr(row.stockValue)}</td>
-                </tr>
-                {row.trackBatches && row.batches.length > 0 && (
-                  <tr className="border-b border-line hover:bg-subtle">
-                    <td colSpan={7} className="bg-subtle/60 px-4 py-2">
-                      <div className="flex flex-wrap gap-2">
-                        {row.batches.map((b) => (
-                          <span
-                            key={b.batchNo}
-                            className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
-                              b.expired
-                                ? 'border-red-200 bg-red-50 text-red-700'
-                                : b.expiringSoon
-                                  ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                  : 'border-line bg-surface text-muted'
-                            }`}
-                          >
-                            <span className="font-mono font-medium">{b.batchNo}</span>
-                            <span className="tabular-nums">{b.qty} {row.unit}</span>
-                            {b.expiryDate && (
-                              <span>
-                                {t('batch.exp', {
-                                  date: new Date(b.expiryDate).toLocaleDateString('en-IN'),
-                                })}
-                                {b.expired
-                                  ? ` ${t('batch.expired')}`
-                                  : b.expiringSoon
-                                    ? ` ${t('batch.soon')}`
-                                    : ''}
-                              </span>
-                            )}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[600px] text-sm">
+                <thead>
+                  <tr className="border-b border-line bg-subtle text-left text-[11px] font-bold uppercase tracking-wide text-muted">
+                    <th className="w-auto px-4 py-3 text-left">{t('table.item')}</th>
+                    <th className="w-fit px-3 py-3 text-center">{t('table.itemCode')}</th>
+                    <th className="w-fit px-3 py-3 text-center">{t('table.hsn')}</th>
+                    <th className="w-fit px-3 py-3 text-right">{t('table.opening')}</th>
+                    <th className="w-fit px-3 py-3 text-right">{t('table.onHand')}</th>
+                    <th className="w-fit px-3 py-3 text-right">{t('table.value')}</th>
+                    {canManage && <th className="w-fit px-4 py-3 text-center">{tc('actions')}</th>}
                   </tr>
-                )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {stock.map((row) => (
+                    <Fragment key={row.itemId}>
+                      <tr className="border-b border-line last:border-0 hover:bg-subtle">
+                        <td className="px-4 py-3 font-medium text-left">
+                          {row.name}
+                          {row.lowStock && (
+                            <span className="ml-2 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                              {t('lowStockBadge')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-3 font-mono text-xs text-muted text-center">
+                          {row.sku ?? 'N/A'}
+                        </td>
+                        <td className="px-3 py-3 font-mono text-xs text-muted text-center">
+                          {row.hsnCode ?? 'N/A'}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">
+                          {row.openingStock} {row.unit}
+                        </td>
+                        <td className="px-3 py-3 text-right font-semibold tabular-nums">
+                          {row.onHand} {row.unit}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">₹{inr(row.stockValue)}</td>
+                        {canManage && (
+                          <td className="px-4 py-3 text-center">
+                            <Button
+                              variant="secondary"
+                              onClick={() => onStartEdit?.(row)}
+                              className="px-2 py-1 text-xs"
+                            >
+                              {t('table.update')}
+                            </Button>
+                          </td>
+                        )}
+                      </tr>
+                      {row.trackBatches && row.batches.length > 0 && (
+                        <tr className="border-b border-line hover:bg-subtle">
+                          <td colSpan={canManage ? 7 : 6} className="bg-subtle/60 px-4 py-2">
+                            <div className="flex flex-wrap gap-2">
+                              {row.batches.map((b) => (
+                                <span
+                                  key={b.batchNo}
+                                  className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs ${
+                                    b.expired
+                                      ? 'border-red-200 bg-red-50 text-red-700'
+                                      : b.expiringSoon
+                                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                        : 'border-line bg-surface text-muted'
+                                  }`}
+                                >
+                                  <span className="font-mono font-medium">{b.batchNo}</span>
+                                  <span className="tabular-nums">{b.qty} {row.unit}</span>
+                                  {b.expiryDate && (
+                                    <span>
+                                      {t('batch.exp', {
+                                        date: new Date(b.expiryDate).toLocaleDateString('en-IN'),
+                                      })}
+                                      {b.expired
+                                        ? ` ${t('batch.expired')}`
+                                        : b.expiringSoon
+                                          ? ` ${t('batch.soon')}`
+                                          : ''}
+                                    </span>
+                                  )}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
     </>

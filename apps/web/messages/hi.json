@@ -31,7 +31,8 @@
     "deleted": "हटा दिया गया",
     "deleteDocTitle": "स्थायी रूप से हटाएँ?",
     "deleteDocBody": "यह दस्तावेज़ को स्थायी रूप से हटा देता है और उसकी लेखा प्रविष्टियाँ, भुगतान और स्टॉक उलट देता है। इसे पूर्ववत नहीं किया जा सकता।",
-    "stateCode": "राज्य कोड"
+    "stateCode": "राज्य कोड",
+    "reset": "रीसेट"
   },
   "table": {
     "records": "{count, plural, one {# रिकॉर्ड} other {# रिकॉर्ड}}",
@@ -1022,13 +1023,14 @@
     "saved": "ई-इनवॉइस क्रेडेंशियल सहेजे गए"
   },
   "items": {
-    "searchPlaceholder": "नाम, HSN, SKU से खोजें…",
+    "searchPlaceholder": "नाम, HSN, कोड से खोजें…",
     "newItem": "+ नई वस्तु",
     "newItemTitle": "नई वस्तु",
     "editTitle": "{name} संपादित करें",
     "itemFallback": "वस्तु",
     "fields": {
       "itemName": "वस्तु का नाम",
+      "itemCode": "वस्तु कोड",
       "hsnCode": "HSN कोड",
       "unit": "इकाई",
       "gstRate": "GST दर %",
@@ -1065,6 +1067,7 @@
     },
     "table": {
       "item": "वस्तु",
+      "itemCode": "कोड",
       "hsn": "HSN",
       "unit": "इकाई",
       "gst": "GST",
@@ -1090,18 +1093,22 @@
     }
   },
   "stock": {
+    "searchPlaceholder": "नाम, कोड या HSN से खोजें…",
+    "updateStockButton": "स्टॉक अपडेट करें",
     "stockValue": "स्टॉक मूल्य",
     "lowStockItems": "कम-स्टॉक वस्तुएँ",
     "noItems": "अभी तक कोई वस्तु नहीं।",
     "lowStockBadge": "कम स्टॉक",
     "table": {
       "item": "वस्तु",
+      "itemCode": "कोड",
       "opening": "प्रारंभिक",
       "in": "आवक",
       "out": "जावक",
       "onHand": "उपलब्ध",
       "avgRate": "औसत दर",
-      "value": "मूल्य"
+      "value": "मूल्य",
+      "update": "अपडेट"
     },
     "batch": {
       "exp": "· समाप्ति {date}",
@@ -1135,7 +1142,21 @@
     "colNo": "सं.",
     "colRoute": "से → तक",
     "colItems": "वस्तुएँ",
-    "noTransfers": "अभी तक कोई स्टॉक स्थानांतरण नहीं। प्रत्येक स्थान की गिनती सटीक रखने के लिए शाखाओं के बीच स्टॉक भेजें।"
+    "noTransfers": "अभी तक कोई स्टॉक स्थानांतरण नहीं। प्रत्येक स्थान की गिनती सटीक रखने के लिए शाखाओं के बीच स्टॉक भेजें।",
+    "modal": {
+      "title": "स्टॉक अपडेट करें",
+      "selectItem": "वस्तु चुनें",
+      "selectItemPlaceholder": "वस्तु चुनें…",
+      "searchPlaceholder": "नाम, कोड या HSN से खोजें…",
+      "noItemsFound": "कोई वस्तु नहीं मिली",
+      "itemCode": "वस्तु कोड",
+      "hsn": "HSN",
+      "quantity": "मात्रा",
+      "updateStock": "स्टॉक अपडेट करें",
+      "selectItemError": "कृपया एक वस्तु चुनें",
+      "quantityError": "कृपया मात्रा दर्ज करें",
+      "toastUpdated": "स्टॉक अपडेट हुआ"
+    }
   },
   "landing": {
     "nav": {
@@ -2555,6 +2576,10 @@
     "applyTaxHint": "कर-मुक्त अनुमान के लिए बंद करें",
     "items": "वस्तुएँ",
     "freeText": "मुक्त-पाठ पंक्ति",
+    "itemSearchPlaceholder": "आइटम नाम, कोड या HSN से खोजें…",
+    "noItemsFound": "कोई आइटम नहीं मिला",
+    "itemOptionCode": "कोड: {code}",
+    "itemOptionHsn": "HSN: {hsn}",
     "addCustomer": "+ ग्राहक जोड़ें",
     "addVendor": "+ विक्रेता जोड़ें",
     "addItem": "+ आइटम जोड़ें",

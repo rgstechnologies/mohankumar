@@ -352,6 +352,23 @@ export function DocEntryForm({
 
   const taxedLines = config.noTax ? false : config.taxToggle && !applyTax ? false : true;
 
+  const itemOptions = useMemo(() => [
+    { value: '', label: t('freeText') },
+    ...items.map((it) => {
+      const metaParts = [
+        it.sku ? t('itemOptionCode', { code: it.sku }) : '',
+        it.hsnCode ? t('itemOptionHsn', { hsn: it.hsnCode }) : '',
+      ].filter(Boolean);
+
+      return {
+        value: it.id,
+        label: it.name,
+        hint: metaParts.join(' • ') || undefined,
+        keywords: [it.name, it.sku ?? '', it.hsnCode ?? ''].join(' '),
+      };
+    }),
+  ], [items, t]);
+
   function updateLine(index: number, patch: Partial<DraftLine>) {
     setLines((prev) =>
       prev.map((line, i) => {
@@ -711,16 +728,12 @@ export function DocEntryForm({
                         <Combobox
                           value={line.itemId}
                           onChange={(v) => updateLine(i, { itemId: v })}
-                          placeholder={t('item')}
-                          searchPlaceholder={tc('search')}
+                          placeholder={t('freeText')}
+                          searchPlaceholder={t('itemSearchPlaceholder')}
+                          emptyText={t('noItemsFound')}
                           className="w-full"
-                          options={[
-                            ...items.map((it) => ({
-                              value: it.id,
-                              label: it.name,
-                              hint: it.hsnCode ?? undefined,
-                            })),
-                          ]}
+                          options={itemOptions}
+                          twoLine
                         />
                         <button
                           type="button"
