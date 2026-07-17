@@ -77,6 +77,7 @@ export function AddPartyModal({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [mirrorAlias, setMirrorAlias] = useState(true);
   const set = (patch: Partial<PartyDraft>) => setDraft((d) => ({ ...d, ...patch }));
 
   /** Fetch GSTIN details from the government portal and auto-fill the form. */
@@ -115,6 +116,38 @@ export function AddPartyModal({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
+
+    if (draft.type === 'CUSTOMER') {
+      if (!draft.name.trim()) {
+        setError(t('nameRequired'));
+        return;
+      }
+      if (!draft.gstin.trim()) {
+        setError(t('gstinRequired'));
+        return;
+      }
+      if (!draft.phone.trim()) {
+        setError(t('phoneRequired'));
+        return;
+      }
+      if (!draft.state) {
+        setError(t('stateRequired'));
+        return;
+      }
+      if (!draft.addressLine1.trim()) {
+        setError(t('addressLine1Required'));
+        return;
+      }
+      if (!draft.city.trim()) {
+        setError(t('cityRequired'));
+        return;
+      }
+      if (!draft.pincode.trim()) {
+        setError(t('pincodeRequired'));
+        return;
+      }
+    }
+
     setBusy(true);
     try {
       const created = await api.post<SavedParty>(`/companies/${companyId}/parties`, {
@@ -165,22 +198,56 @@ export function AddPartyModal({
 
         <div className="grid grid-cols-2 gap-3">
           <div className="col-span-2">
-            <Label>{tc('name')}</Label>
-            <Input required value={draft.name} onChange={(e) => set({ name: e.target.value })} />
+            <Label>
+              {tc('name')}
+              {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+            </Label>
+            <Input
+              required
+              value={draft.name}
+              onChange={(e) => {
+                const newName = e.target.value;
+                setDraft((d) => {
+                  const patch: Partial<PartyDraft> = { name: newName };
+                  if (mirrorAlias) {
+                    patch.aliasName = newName;
+                  }
+                  return { ...d, ...patch };
+                });
+              }}
+              onBlur={() => setMirrorAlias(false)}
+            />
           </div>
           <div>
             <Label>{t('aliasOptional')}</Label>
-            <Input value={draft.aliasName} onChange={(e) => set({ aliasName: e.target.value })} />
+            <Input
+              value={draft.aliasName}
+              onChange={(e) => {
+                set({ aliasName: e.target.value });
+                setMirrorAlias(false);
+              }}
+            />
           </div>
           <div>
-            <Label>{t('phoneOptional')}</Label>
-            <Input value={draft.phone} onChange={(e) => set({ phone: e.target.value })} />
+            <Label>
+              {draft.type === 'CUSTOMER' ? t('phone') : t('phoneOptional')}
+              {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+            </Label>
+            <Input
+              required={draft.type === 'CUSTOMER'}
+              value={draft.phone}
+              onChange={(e) => set({ phone: e.target.value })}
+            />
           </div>
           <div>
-            <Label>{t('gstinOptional')}</Label>
+            <Label>
+              {draft.type === 'CUSTOMER' ? t('gstin') : t('gstinOptional')}
+              {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+            </Label>
             <div className="flex gap-2">
               <Input
                 className="flex-1"
+                required={draft.type === 'CUSTOMER'}
                 value={draft.gstin}
                 maxLength={15}
                 onChange={(e) => set({ gstin: e.target.value.toUpperCase() })}
@@ -199,7 +266,10 @@ export function AddPartyModal({
             </div>
           </div>
           <div>
-            <Label>{t('stateLabel')}</Label>
+            <Label>
+              {t('stateLabel')}
+              {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+            </Label>
             <Select value={draft.state} onChange={(e) => set({ state: e.target.value })}>
               <option value="">{t('selectState')}</option>
               {INDIAN_STATES.map((s) => (
@@ -219,20 +289,38 @@ export function AddPartyModal({
             />
           </div>
           <div className="col-span-2">
-            <Label>{t('addressLine1')}</Label>
-            <Input value={draft.addressLine1} onChange={(e) => set({ addressLine1: e.target.value })} />
+            <Label>
+              {t('addressLine1')}
+              {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+            </Label>
+            <Input
+              required={draft.type === 'CUSTOMER'}
+              value={draft.addressLine1}
+              onChange={(e) => set({ addressLine1: e.target.value })}
+            />
           </div>
           <div className="col-span-2">
             <Label>{t('addressLine2')}</Label>
             <Input value={draft.addressLine2} onChange={(e) => set({ addressLine2: e.target.value })} />
           </div>
           <div>
-            <Label>{t('cityOptional')}</Label>
-            <Input value={draft.city} onChange={(e) => set({ city: e.target.value })} />
+            <Label>
+              {draft.type === 'CUSTOMER' ? t('city') : t('cityOptional')}
+              {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+            </Label>
+            <Input
+              required={draft.type === 'CUSTOMER'}
+              value={draft.city}
+              onChange={(e) => set({ city: e.target.value })}
+            />
           </div>
           <div>
-            <Label>{t('pincodeOptional')}</Label>
+            <Label>
+              {draft.type === 'CUSTOMER' ? t('pincode') : t('pincodeOptional')}
+              {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
+            </Label>
             <Input
+              required={draft.type === 'CUSTOMER'}
               value={draft.pincode}
               maxLength={6}
               onChange={(e) => set({ pincode: e.target.value.replace(/\D/g, '') })}
