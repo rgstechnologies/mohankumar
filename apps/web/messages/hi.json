@@ -1155,7 +1155,10 @@
       "updateStock": "स्टॉक अपडेट करें",
       "selectItemError": "कृपया एक वस्तु चुनें",
       "quantityError": "कृपया मात्रा दर्ज करें",
-      "toastUpdated": "स्टॉक अपडेट हुआ"
+      "toastUpdated": "स्टॉक अपडेट हुआ",
+      "discardTitle": "Discard unsaved changes?",
+      "discardCancel": "Continue Editing",
+      "discardConfirm": "Discard Changes"
     }
   },
   "landing": {

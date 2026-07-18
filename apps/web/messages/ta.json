@@ -1155,7 +1155,10 @@
       "updateStock": "சரக்கிருப்பை புதுப்பிக்கவும்",
       "selectItemError": "தயவு செய்து ஒரு பொருளைத் தேர்வு செய்யவும்",
       "quantityError": "தயவு செய்து அளவை உள்ளிடவும்",
-      "toastUpdated": "சரக்கிருப்பு புதுப்பிக்கப்பட்டது"
+      "toastUpdated": "சரக்கிருப்பு புதுப்பிக்கப்பட்டது",
+      "discardTitle": "Discard unsaved changes?",
+      "discardCancel": "Continue Editing",
+      "discardConfirm": "Discard Changes"
     }
   },
   "landing": {
