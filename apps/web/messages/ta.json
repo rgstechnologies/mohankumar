@@ -1590,9 +1590,14 @@
       "profit-loss": "இலாப நட்டக் கணக்கு",
       "balance-sheet": "இருப்புநிலைக் குறிப்பு",
       "gstr1": "GSTR-1",
-      "gstr3b": "GSTR-3B"
+      "gstr3b": "GSTR-3B",
+      "estimates": "மதிப்பீட்டு அறிக்கை",
+      "sales": "விற்பனை அறிக்கை"
     },
     "loadingReport": "அறிக்கை ஏற்றப்படுகிறது…",
+    "totalDebit": "மொத்த பற்று",
+    "totalCredit": "மொத்த வரவு",
+    "totalMoney": "மொத்த தொகை (வரவு - பற்று)",
     "trialBalanceAsOf": "{date} அன்றைய இருப்பாய்வு",
     "ledger": "பேரேடு",
     "group": "குழு",

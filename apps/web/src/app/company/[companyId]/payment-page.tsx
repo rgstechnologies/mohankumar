@@ -83,9 +83,9 @@ export function PaymentPage({
   const people = useMemo(
     () =>
       parties.filter(
-        (p) => p.type === partyType && (!docKind || p.docType === docKind),
+        (p) => p.type === partyType,
       ),
-    [parties, partyType, docKind],
+    [parties, partyType],
   );
   const cashLedger = useMemo(
     () => ledgers.find((l) => l.group.name === 'Cash-in-Hand'),

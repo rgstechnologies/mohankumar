@@ -78,4 +78,16 @@ export class ReportsController {
   ) {
     return this.reports.gstr3b(companyId, from, to);
   }
+
+  @Get('reports/estimates')
+  @ApiOperation({ summary: 'Estimate Report (credit & debit records)' })
+  estimateReport(@Param('companyId', ParseUUIDPipe) companyId: string) {
+    return this.reports.estimateReport(companyId);
+  }
+
+  @Get('reports/sales')
+  @ApiOperation({ summary: 'Sales Report (credit & debit records)' })
+  salesReport(@Param('companyId', ParseUUIDPipe) companyId: string) {
+    return this.reports.salesReport(companyId);
+  }
 }

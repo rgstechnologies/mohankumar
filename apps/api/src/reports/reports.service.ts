@@ -4,6 +4,7 @@ import {
   EntryType,
   EstimateStatus,
   InvoiceStatus,
+  PartyPaymentDirection,
   PartyType,
   VoucherStatus,
 } from '@prisma/client';
@@ -621,6 +622,195 @@ export class ReportsService {
       outstandingInvoiceAmount: outstanding,
       lowStockCount,
       recentInvoices: recentDocs,
+    };
+  }
+
+  async estimateReport(companyId: string) {
+    const [company, parties, estimates, partyPayments] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { salesPaymentLink: true },
+      }),
+      this.prisma.party.findMany({
+        where: { companyId, type: PartyType.CUSTOMER },
+        select: { id: true, type: true, balanceDocType: true },
+      }),
+      this.prisma.estimate.findMany({
+        where: { companyId, status: { not: EstimateStatus.CANCELLED } },
+        include: { party: { select: { name: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.partyPayment.findMany({
+        where: { companyId, direction: PartyPaymentDirection.RECEIPT },
+        include: {
+          estimate: { select: { estimateNo: true } },
+          party: { select: { name: true } },
+        },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
+
+    const resolvedDocTypeOf = (partyId: string) => {
+      const p = parties.find((x) => x.id === partyId);
+      if (!p) return 'invoice';
+      if (p.balanceDocType === 'invoice' || p.balanceDocType === 'estimate') {
+        return p.balanceDocType;
+      }
+      return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
+    };
+
+    const rows: {
+      id: string;
+      date: string;
+      description: string;
+      debit: number;
+      credit: number;
+    }[] = [];
+
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    for (const est of estimates) {
+      const amount = Number(est.total);
+      totalDebit += amount;
+      rows.push({
+        id: `est-${est.id}`,
+        date: est.date.toISOString().slice(0, 10),
+        description: `Estimate #${est.estimateNo} (${est.party.name})`,
+        debit: amount,
+        credit: 0,
+      });
+    }
+
+    for (const p of partyPayments) {
+      const isEst = p.estimateId !== null || resolvedDocTypeOf(p.partyId) === 'estimate';
+      if (!isEst) continue;
+
+      const amount = Number(p.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-${p.id}`,
+        date: p.date.toISOString().slice(0, 10),
+        description: p.estimate
+          ? `Payment In (against Estimate #${p.estimate.estimateNo}) - ${p.party.name}`
+          : `Payment In (Advance) - ${p.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      rows,
+      totalDebit: r2(totalDebit),
+      totalCredit: r2(totalCredit),
+      netAmount: r2(totalCredit - totalDebit),
+    };
+  }
+
+  async salesReport(companyId: string) {
+    const [company, parties, invoices, payments, partyPayments] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { salesPaymentLink: true },
+      }),
+      this.prisma.party.findMany({
+        where: { companyId, type: PartyType.CUSTOMER },
+        select: { id: true, type: true, balanceDocType: true },
+      }),
+      this.prisma.invoice.findMany({
+        where: { companyId, status: { not: InvoiceStatus.CANCELLED } },
+        include: { party: { select: { name: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.payment.findMany({
+        where: { companyId, invoice: { status: { not: InvoiceStatus.CANCELLED } } },
+        include: {
+          invoice: {
+            select: {
+              invoiceNo: true,
+              party: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.partyPayment.findMany({
+        where: { companyId, direction: PartyPaymentDirection.RECEIPT },
+        include: {
+          party: { select: { name: true } },
+        },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
+
+    const resolvedDocTypeOf = (partyId: string) => {
+      const p = parties.find((x) => x.id === partyId);
+      if (!p) return 'invoice';
+      if (p.balanceDocType === 'invoice' || p.balanceDocType === 'estimate') {
+        return p.balanceDocType;
+      }
+      return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
+    };
+
+    const rows: {
+      id: string;
+      date: string;
+      description: string;
+      debit: number;
+      credit: number;
+    }[] = [];
+
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    for (const inv of invoices) {
+      const amount = Number(inv.total);
+      totalDebit += amount;
+      rows.push({
+        id: `inv-${inv.id}`,
+        date: inv.date.toISOString().slice(0, 10),
+        description: `Sales Bill #${inv.invoiceNo} (${inv.party.name})`,
+        debit: amount,
+        credit: 0,
+      });
+    }
+
+    for (const p of payments) {
+      const amount = Number(p.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-${p.id}`,
+        date: p.date.toISOString().slice(0, 10),
+        description: `Payment In (against Bill #${p.invoice.invoiceNo}) - ${p.invoice.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    for (const pp of partyPayments) {
+      const isInv = pp.estimateId === null && resolvedDocTypeOf(pp.partyId) === 'invoice';
+      if (!isInv) continue;
+
+      const amount = Number(pp.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-adv-${pp.id}`,
+        date: pp.date.toISOString().slice(0, 10),
+        description: `Payment In (Advance) - ${pp.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      rows,
+      totalDebit: r2(totalDebit),
+      totalCredit: r2(totalCredit),
+      netAmount: r2(totalCredit - totalDebit),
     };
   }
 }
