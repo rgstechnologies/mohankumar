@@ -133,8 +133,8 @@
       "print-settings": "Print Settings",
       "payment-in": "Payment In",
       "payment-out": "Payment Out",
-      "estimate-payments": "Estimate Payment-In",
-      "invoice-payments": "Invoice Payment-In"
+      "estimate-payments": "Payment In",
+      "invoice-payments": "Payment In"
     },
     "roles": {
       "OWNER": "Owner",
@@ -2577,6 +2577,7 @@
     "applyTaxHint": "Turn off for a tax-free estimate",
     "items": "Items",
     "freeText": "Free-text line",
+    "selectItem": "Select item…",
     "itemSearchPlaceholder": "Search by item name, code, or HSN…",
     "noItemsFound": "No items found",
     "itemOptionCode": "Code: {code}",

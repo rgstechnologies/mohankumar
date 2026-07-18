@@ -133,8 +133,8 @@
       "print-settings": "प्रिंट सेटिंग्स",
       "payment-in": "भुगतान प्राप्त",
       "payment-out": "भुगतान दिया",
-      "estimate-payments": "अनुमान भुगतान प्राप्त",
-      "invoice-payments": "चालान भुगतान प्राप्त"
+      "estimate-payments": "भुगतान प्राप्त",
+      "invoice-payments": "भुगतान प्राप्त"
     },
     "roles": {
       "OWNER": "मालिक",
@@ -2576,6 +2576,7 @@
     "applyTaxHint": "कर-मुक्त अनुमान के लिए बंद करें",
     "items": "वस्तुएँ",
     "freeText": "मुक्त-पाठ पंक्ति",
+    "selectItem": "आइटम चुनें…",
     "itemSearchPlaceholder": "आइटम नाम, कोड या HSN से खोजें…",
     "noItemsFound": "कोई आइटम नहीं मिला",
     "itemOptionCode": "कोड: {code}",

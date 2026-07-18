@@ -16,8 +16,7 @@ export const ESTIMATE_ENTRY: DocEntryConfig = {
   kind: 'estimate',
   apiBase: 'estimates',
   tab: 'estimates',
-  secondDate: 'validUntil',
-  taxToggle: true,
+  noTax: true,
   extraCharges: true,
   stateOfSupply: true,
 };
@@ -26,7 +25,6 @@ export const PROFORMA_ENTRY: DocEntryConfig = {
   kind: 'proformaInvoice',
   apiBase: 'proforma-invoices',
   tab: 'proforma-invoices',
-  secondDate: 'validUntil',
   extraCharges: true,
 };
 
@@ -35,8 +33,7 @@ export const PURCHASE_ESTIMATE_ENTRY: DocEntryConfig = {
   apiBase: 'purchase-estimates',
   tab: 'purchase-estimates',
   party: 'vendor',
-  secondDate: 'validUntil',
-  taxToggle: true,
+  noTax: true,
   extraCharges: true,
 };
 
