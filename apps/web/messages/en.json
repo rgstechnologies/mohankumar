@@ -1591,9 +1591,14 @@
       "profit-loss": "Profit & Loss",
       "balance-sheet": "Balance Sheet",
       "gstr1": "GSTR-1",
-      "gstr3b": "GSTR-3B"
+      "gstr3b": "GSTR-3B",
+      "estimates": "Estimate Report",
+      "sales": "Sales Report"
     },
     "loadingReport": "Loading report…",
+    "totalDebit": "Total Debit",
+    "totalCredit": "Total Credit",
+    "totalMoney": "Total Money (Credit - Debit)",
     "trialBalanceAsOf": "Trial Balance as of {date}",
     "ledger": "Ledger",
     "group": "Group",

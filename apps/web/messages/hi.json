@@ -1590,9 +1590,14 @@
       "profit-loss": "लाभ और हानि",
       "balance-sheet": "बैलेंस शीट",
       "gstr1": "GSTR-1",
-      "gstr3b": "GSTR-3B"
+      "gstr3b": "GSTR-3B",
+      "estimates": "अनुमान रिपोर्ट",
+      "sales": "बिक्री रिपोर्ट"
     },
     "loadingReport": "रिपोर्ट लोड हो रही है…",
+    "totalDebit": "कुल नामे",
+    "totalCredit": "कुल जमा",
+    "totalMoney": "कुल राशि (जमा - नामे)",
     "trialBalanceAsOf": "{date} तक का तलपट",
     "ledger": "खाता-बही",
     "group": "समूह",

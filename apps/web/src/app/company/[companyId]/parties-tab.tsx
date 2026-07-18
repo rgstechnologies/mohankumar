@@ -691,10 +691,12 @@ function PartyRowItem({
   const isCustomer = party.type === 'CUSTOMER';
 
   // Open the dedicated Payment In/Out page with this party pre-selected.
-  const openPaymentPage = () =>
-    router.push(
-      `/company/${companyId}?tab=payment-${isCustomer ? 'in' : 'out'}&party=${party.id}`,
-    );
+  const openPaymentPage = () => {
+    const targetTab = isCustomer
+      ? (party.docType === 'estimate' ? 'estimate-payments' : 'invoice-payments')
+      : 'payment-out';
+    router.push(`/company/${companyId}?tab=${targetTab}&party=${party.id}`);
+  };
 
   const [showPay, setShowPay] = useState(false);
   const [amount, setAmount] = useState('');
