@@ -2577,6 +2577,7 @@
     "applyTaxHint": "Turn off for a tax-free estimate",
     "items": "Items",
     "freeText": "Free-text line",
+    "selectItem": "Select item…",
     "itemSearchPlaceholder": "Search by item name, code, or HSN…",
     "noItemsFound": "No items found",
     "itemOptionCode": "Code: {code}",

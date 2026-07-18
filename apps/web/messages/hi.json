@@ -2576,6 +2576,7 @@
     "applyTaxHint": "कर-मुक्त अनुमान के लिए बंद करें",
     "items": "वस्तुएँ",
     "freeText": "मुक्त-पाठ पंक्ति",
+    "selectItem": "आइटम चुनें…",
     "itemSearchPlaceholder": "आइटम नाम, कोड या HSN से खोजें…",
     "noItemsFound": "कोई आइटम नहीं मिला",
     "itemOptionCode": "कोड: {code}",

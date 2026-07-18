@@ -352,9 +352,10 @@ export function DocEntryForm({
 
   const taxedLines = config.noTax ? false : config.taxToggle && !applyTax ? false : true;
 
-  const itemOptions = useMemo(() => [
-    { value: '', label: t('freeText') },
-    ...items.map((it) => {
+  const isFreeTextRemoved = config.kind === 'estimate' || config.kind === 'invoice';
+
+  const itemOptions = useMemo(() => {
+    const options = items.map((it) => {
       const metaParts = [
         it.sku ? t('itemOptionCode', { code: it.sku }) : '',
         it.hsnCode ? t('itemOptionHsn', { hsn: it.hsnCode }) : '',
@@ -366,8 +367,16 @@ export function DocEntryForm({
         hint: metaParts.join(' • ') || undefined,
         keywords: [it.name, it.sku ?? '', it.hsnCode ?? ''].join(' '),
       };
-    }),
-  ], [items, t]);
+    });
+
+    if (isFreeTextRemoved) {
+      return options;
+    }
+    return [
+      { value: '', label: t('freeText') },
+      ...options,
+    ];
+  }, [items, t, isFreeTextRemoved]);
 
   function updateLine(index: number, patch: Partial<DraftLine>) {
     setLines((prev) =>
@@ -512,7 +521,12 @@ export function DocEntryForm({
   }
 
   const canSave =
-    !!partyId && lines.some((l) => Number(l.quantity) > 0 && (l.itemId || l.description));
+    !!partyId &&
+    lines.some(
+      (l) =>
+        Number(l.quantity) > 0 &&
+        (l.itemId || (isFreeTextRemoved ? l.description !== '' : !!l.description)),
+    );
 
   return (
     <div className="min-h-screen bg-subtle">
@@ -724,7 +738,7 @@ export function DocEntryForm({
                         <Combobox
                           value={line.itemId}
                           onChange={(v) => updateLine(i, { itemId: v })}
-                          placeholder={t('freeText')}
+                          placeholder={isFreeTextRemoved ? t('selectItem') : t('freeText')}
                           searchPlaceholder={t('itemSearchPlaceholder')}
                           emptyText={t('noItemsFound')}
                           className="w-full"
@@ -738,7 +752,7 @@ export function DocEntryForm({
                         >
                           {t('addItem')}
                         </button>
-                        {!line.itemId && (
+                        {(!isFreeTextRemoved || line.description !== '') && !line.itemId && (
                           <Input
                             required
                             value={line.description}
