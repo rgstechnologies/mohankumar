@@ -653,10 +653,7 @@ export class ReportsService {
     const resolvedDocTypeOf = (partyId: string) => {
       const p = parties.find((x) => x.id === partyId);
       if (!p) return 'invoice';
-      if (p.balanceDocType === 'invoice' || p.balanceDocType === 'estimate') {
-        return p.balanceDocType;
-      }
-      return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
+      return this.balances.resolveDocType(p, company);
     };
 
     const rows: {
@@ -683,7 +680,14 @@ export class ReportsService {
     }
 
     for (const p of partyPayments) {
-      const isEst = p.estimateId !== null || resolvedDocTypeOf(p.partyId) === 'estimate';
+      // A partyPayment belongs to the estimate report when:
+      //   1. It is explicitly linked to an estimate (estimateId set), OR
+      //   2. Its `source` is 'estimate' (unlinked advance from the Estimate Banking screen), OR
+      //   3. Legacy record without source: fall back to the party's resolved doc type.
+      const isEst =
+        !!p.estimateId ||
+        p.source === 'estimate' ||
+        (p.source === null && resolvedDocTypeOf(p.partyId) === 'estimate');
       if (!isEst) continue;
 
       const amount = Number(p.amount);
@@ -748,10 +752,7 @@ export class ReportsService {
     const resolvedDocTypeOf = (partyId: string) => {
       const p = parties.find((x) => x.id === partyId);
       if (!p) return 'invoice';
-      if (p.balanceDocType === 'invoice' || p.balanceDocType === 'estimate') {
-        return p.balanceDocType;
-      }
-      return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
+      return this.balances.resolveDocType(p, company);
     };
 
     const rows: {
@@ -790,7 +791,14 @@ export class ReportsService {
     }
 
     for (const pp of partyPayments) {
-      const isInv = pp.estimateId === null && resolvedDocTypeOf(pp.partyId) === 'invoice';
+      // A partyPayment belongs to the sales report when:
+      //   1. It has no estimateId (not linked to an estimate), AND
+      //   2. Its `source` is 'invoice' (advance from the Invoice Banking screen), OR
+      //   3. Legacy record without source: fall back to the party's resolved doc type.
+      const isInv =
+        !pp.estimateId &&
+        (pp.source === 'invoice' ||
+          (pp.source === null && resolvedDocTypeOf(pp.partyId) === 'invoice'));
       if (!isInv) continue;
 
       const amount = Number(pp.amount);

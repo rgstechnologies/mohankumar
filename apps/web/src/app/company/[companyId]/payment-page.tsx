@@ -123,6 +123,8 @@ export function PaymentPage({
   const [openDocs, setOpenDocs] = useState<OpenDoc[]>([]);
   const [history, setHistory] = useState<HistoryDoc[]>([]);
   const [payHistory, setPayHistory] = useState<PartyPaymentView[]>([]);
+  /** Screen-specific outstanding: sum of outstanding for this screen's doc type only. */
+  const [screenBalance, setScreenBalance] = useState<number | null>(null);
   const [loadingParty, setLoadingParty] = useState(false);
 
   // Preselect a party when arriving from a customer/vendor row (?party=…).
@@ -144,12 +146,25 @@ export function PaymentPage({
         setOpenDocs([]);
         setHistory([]);
         setPayHistory([]);
+        setScreenBalance(null);
         return;
       }
       setLoadingParty(true);
       try {
         const pays = await fetchPartyPayments(companyId, pid).catch(() => []);
-        setPayHistory(pays);
+        // Filter payment history to match only this screen's scope:
+        // - Estimate Banking: payments where source === 'estimate' or estimateId is set (legacy).
+        // - Invoice Banking:  payments where source === 'invoice' or both source and estimateId are null (legacy).
+        const screenPays = pays.filter((p) => {
+          if (useEstimate) {
+            return !!p.estimateId || p.source === 'estimate';
+          } else if (isIn) {
+            return !p.estimateId && (p.source === 'invoice' || p.source === null);
+          }
+          // Payment-Out: show all payment-direction entries.
+          return p.direction === 'PAYMENT';
+        });
+        setPayHistory(screenPays);
         // Money paid so far against a specific estimate.
         const paidFor = (docId: string) =>
           pays
@@ -172,11 +187,14 @@ export function PaymentPage({
             };
           });
           setOpenDocs(rows.filter((r) => r.outstanding > 0));
-          setHistory(
-            rows
-              .map((r) => ({ no: r.no, date: r.date, total: r.total, paid: r.paid, outstanding: r.outstanding, isBill: false }))
-              .sort((a, b) => b.date.localeCompare(a.date)),
-          );
+          const histRows = rows
+            .map((r) => ({ no: r.no, date: r.date, total: r.total, paid: r.paid, outstanding: r.outstanding, isBill: false }))
+            .sort((a, b) => b.date.localeCompare(a.date));
+          setHistory(histRows);
+          // Balance = Σ estimate totals (debit) − Σ all estimate-screen payments (credit).
+          const totalDebit = rows.reduce((s, r) => s + r.total, 0);
+          const totalCredit = screenPays.reduce((s, p) => s + p.amount, 0);
+          setScreenBalance(Math.round((totalDebit - totalCredit) * 100) / 100);
         } else if (isIn) {
           const invs = (await fetchInvoices(companyId))
             .filter((i) => i.party.id === pid && i.status !== 'CANCELLED');
@@ -185,11 +203,14 @@ export function PaymentPage({
               .filter((i) => i.outstanding > 0)
               .map((i) => ({ id: i.id, no: i.invoiceNo, date: i.date, total: i.total, outstanding: i.outstanding, kind: 'invoice' as const })),
           );
-          setHistory(
-            invs
-              .map((i) => ({ no: i.invoiceNo, date: i.date, total: i.total, paid: i.total - i.outstanding, outstanding: i.outstanding, isBill: false }))
-              .sort((a, b) => b.date.localeCompare(a.date)),
-          );
+          const histRows = invs
+            .map((i) => ({ no: i.invoiceNo, date: i.date, total: i.total, paid: i.total - i.outstanding, outstanding: i.outstanding, isBill: false }))
+            .sort((a, b) => b.date.localeCompare(a.date));
+          setHistory(histRows);
+          // Balance = Σ invoice outstanding (already net of linked payments) − unlinked advances.
+          const totalOutstanding = invs.reduce((s, i) => s + i.outstanding, 0);
+          const unlinkedPaid = screenPays.reduce((s, p) => s + p.amount, 0);
+          setScreenBalance(Math.round((totalOutstanding - unlinkedPaid) * 100) / 100);
         } else {
           const bills = (await fetchPurchaseBills(companyId))
             .filter((b) => b.party.id === pid && b.status !== 'CANCELLED');
@@ -198,11 +219,14 @@ export function PaymentPage({
               .filter((b) => b.outstanding > 0)
               .map((b) => ({ id: b.id, no: b.billNo, date: b.date, total: b.total, outstanding: b.outstanding, kind: 'bill' as const })),
           );
-          setHistory(
-            bills
-              .map((b) => ({ no: b.billNo, date: b.date, total: b.total, paid: b.total - b.outstanding, outstanding: b.outstanding, isBill: true }))
-              .sort((a, b) => b.date.localeCompare(a.date)),
-          );
+          const histRows = bills
+            .map((b) => ({ no: b.billNo, date: b.date, total: b.total, paid: b.total - b.outstanding, outstanding: b.outstanding, isBill: true }))
+            .sort((a, b) => b.date.localeCompare(a.date));
+          setHistory(histRows);
+          // Balance = Σ bill outstanding (already net of linked payments) − unlinked advances.
+          const totalOutstanding = bills.reduce((s, b) => s + b.outstanding, 0);
+          const unlinkedPaid = screenPays.reduce((s, p) => s + p.amount, 0);
+          setScreenBalance(Math.round((totalOutstanding - unlinkedPaid) * 100) / 100);
         }
       } finally {
         setLoadingParty(false);
@@ -286,6 +310,7 @@ export function PaymentPage({
           await api.post(`/companies/${companyId}/parties/${partyId}/payments`, {
             amount: pay,
             estimateId: d.id,
+            source: 'estimate',
             ...base,
           });
           remaining = Math.round((remaining - pay) * 100) / 100;
@@ -293,6 +318,7 @@ export function PaymentPage({
         if (remaining > 0) {
           await api.post(`/companies/${companyId}/parties/${partyId}/payments`, {
             amount: remaining,
+            source: 'estimate',
             ...base,
           });
         }
@@ -311,6 +337,7 @@ export function PaymentPage({
         if (Number(advance) > 0) {
           await api.post(`/companies/${companyId}/parties/${partyId}/payments`, {
             amount: Number(advance),
+            source: 'invoice',
             ...base,
           });
         }
@@ -569,11 +596,11 @@ export function PaymentPage({
           <p className="text-sm text-faint">{t('pickToSeeHistory')}</p>
         ) : (
           <div className="space-y-3 text-sm">
-            {selectedParty && (
+            {selectedParty && screenBalance !== null && (
               <div className="rounded-md bg-subtle p-2 text-xs text-muted">
                 {t('currentBalance')}:{' '}
                 <strong className="text-ink">
-                  ₹{inr(selectedParty.outstanding)}
+                  ₹{inr(screenBalance)}
                 </strong>
               </div>
             )}

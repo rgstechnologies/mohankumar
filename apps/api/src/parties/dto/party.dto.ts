@@ -193,6 +193,16 @@ export class RecordPartyPaymentDto {
   @IsOptional()
   @IsUUID()
   purchaseEstimateId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "Banking screen that created this receipt: 'estimate' | 'invoice'. " +
+      "Used by reports to route unlinked advances to the correct report section.",
+    example: 'estimate',
+  })
+  @IsOptional()
+  @IsString()
+  source?: string;
 }
 
 /** One variant of an item (e.g. a colour/size) — created as a child item. */

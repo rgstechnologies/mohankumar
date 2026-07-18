@@ -439,6 +439,7 @@ export function DocEntryForm({
       branchId: branchId || undefined,
       date,
       notes: combinedNotes,
+      isOnline: cashSale,
       lines: lines.map((line) => {
         const { rateExcl } = lineCalc(line);
         const payload: Record<string, unknown> = {
@@ -546,18 +547,18 @@ export function DocEntryForm({
             </h1>
             {config.creditCash && !editId && (
               <div className="ml-2 inline-flex rounded-md border border-line p-0.5 text-xs font-medium">
-                {(['credit', 'cash'] as const).map((m) => (
+                {(['offline', 'online'] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
-                    onClick={() => setCashSale(m === 'cash')}
+                    onClick={() => setCashSale(m === 'online')}
                     className={`rounded px-2.5 py-1 ${
-                      (m === 'cash') === cashSale
+                      (m === 'online') === cashSale
                         ? 'bg-brand-600 text-white'
                         : 'text-muted hover:bg-subtle'
                     }`}
                   >
-                    {t(m === 'cash' ? 'cash' : 'credit')}
+                    {m === 'online' ? 'Online' : 'Offline'}
                   </button>
                 ))}
               </div>
