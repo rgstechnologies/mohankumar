@@ -710,7 +710,7 @@ export class PurchasesService {
         by: ['itemId'],
         where: {
           itemId: { not: null },
-          invoice: { companyId, status: InvoiceStatus.ISSUED },
+          invoice: { companyId, status: InvoiceStatus.ISSUED, isOnline: true },
         },
         _sum: { quantity: true },
       }),

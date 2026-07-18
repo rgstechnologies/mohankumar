@@ -108,7 +108,6 @@ const NAV_GROUPS: { group: string; items: { key: Tab; label: string }[] }[] = [
   {
     group: 'purchase',
     items: [
-      { key: 'purchases', label: 'purchases' },
       { key: 'payment-out', label: 'paymentOut' },
     ],
   },

@@ -370,6 +370,7 @@ export class PartiesService {
           reference: dto.reference,
           note: dto.note,
           estimateId: dto.estimateId,
+          source: dto.source ?? null,
         },
       });
     });
@@ -395,6 +396,7 @@ export class PartiesService {
       reference: p.reference,
       note: p.note,
       estimateId: p.estimateId,
+      source: p.source,
       advanceRef: p.estimate
         ? `EST/${p.estimate.fiscalYear}/${String(p.estimate.estimateNo).padStart(4, '0')}`
         : null,
