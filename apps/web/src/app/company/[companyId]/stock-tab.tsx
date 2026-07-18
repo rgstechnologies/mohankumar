@@ -40,12 +40,14 @@ export function StockTab({
   }
 
   async function handleModalSaved() {
-    setEditingStock(null);
     if (onChanged) await onChanged();
   }
 
   function handleModalClose() {
     setModalOpen(false);
+  }
+
+  function handleDraftCleared() {
     setEditingStock(null);
   }
 
@@ -62,7 +64,6 @@ export function StockTab({
             <Button
               variant="primary"
               onClick={() => {
-                setEditingStock(null);
                 setModalOpen(true);
               }}
             >
@@ -71,9 +72,9 @@ export function StockTab({
           )}
         </div>
       </div>
-      <CompanyStock 
-        companyId={companyId} 
-        stock={table.rows} 
+      <CompanyStock
+        companyId={companyId}
+        stock={table.rows}
         canManage={canManage}
         onStartEdit={startEdit}
       />
@@ -90,6 +91,7 @@ export function StockTab({
         items={items ?? []}
         onSaved={handleModalSaved}
         onClose={handleModalClose}
+        onDraftCleared={handleDraftCleared}
       />
     </div>
   );
@@ -99,13 +101,13 @@ export function StockTab({
 // Stock on hand
 // ----------------------------------------------------------------
 
-function CompanyStock({ 
-  companyId, 
-  stock, 
-  canManage, 
-  onStartEdit 
-}: { 
-  companyId: string; 
+function CompanyStock({
+  companyId,
+  stock,
+  canManage,
+  onStartEdit
+}: {
+  companyId: string;
   stock: StockRow[];
   canManage?: boolean;
   onStartEdit?: (stockRow: StockRow) => void;
@@ -234,4 +236,3 @@ function CompanyStock({
     </>
   );
 }
-

@@ -1156,7 +1156,10 @@
       "updateStock": "Update Stock",
       "selectItemError": "Please select an item",
       "quantityError": "Please enter a quantity",
-      "toastUpdated": "Stock updated"
+      "toastUpdated": "Stock updated",
+      "discardTitle": "Discard unsaved changes?",
+      "discardCancel": "Continue Editing",
+      "discardConfirm": "Discard Changes"
     }
   },
   "landing": {

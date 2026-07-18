@@ -30,7 +30,9 @@ interface ConfirmOptions {
   title: string;
   body?: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   danger?: boolean;
+  defaultAction?: 'confirm' | 'cancel';
 }
 
 interface FeedbackContextValue {
@@ -136,13 +138,14 @@ export function FeedbackProvider({ children }: { children: React.ReactNode }) {
             <div className="mt-6 flex justify-end gap-2">
               <button
                 onClick={() => settle(false)}
+                autoFocus={confirmState.defaultAction !== 'confirm'}
                 className="rounded-lg border border-line-strong bg-surface px-4 py-2 text-sm font-medium text-ink hover:bg-subtle"
               >
-                {t('cancel')}
+                {confirmState.cancelLabel ?? t('cancel')}
               </button>
               <button
                 onClick={() => settle(true)}
-                autoFocus
+                autoFocus={confirmState.defaultAction === 'confirm'}
                 className={`rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm ${
                   confirmState.danger
                     ? 'bg-red-600 hover:bg-red-700'

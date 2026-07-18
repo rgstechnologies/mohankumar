@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useFeedback } from '@/components/feedback';
 import { Button, ErrorText, Input, Label, Combobox, type ComboOption } from '@/components/ui';
@@ -30,6 +30,19 @@ interface StockUpdateModalProps {
   items: ItemRow[];
   onSaved: () => void | Promise<void>;
   onClose: () => void;
+  onDraftCleared?: () => void;
+}
+
+function buildDraft(stockRow?: StockUpdateModalProps['initialStockRow']) {
+  if (!stockRow) return { ...EMPTY_DRAFT };
+  return {
+    itemId: stockRow.itemId,
+    quantity: String(stockRow.onHand),
+  };
+}
+
+function draftSourceKey(stockRow?: StockUpdateModalProps['initialStockRow']) {
+  return stockRow?.itemId ?? 'new';
 }
 
 /**
@@ -43,14 +56,56 @@ export function StockUpdateModal({
   items,
   onSaved,
   onClose,
+  onDraftCleared,
 }: StockUpdateModalProps) {
   const t = useTranslations('stock');
   const tc = useTranslations('common');
-  const { toast } = useFeedback();
+  const { toast, confirm } = useFeedback();
 
   const [draft, setDraft] = useState<StockUpdateDraft>(EMPTY_DRAFT);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [sourceKey, setSourceKey] = useState('');
+  const seededDraftRef = useRef<StockUpdateDraft>(EMPTY_DRAFT);
+  const wasOpenRef = useRef(false);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const closingRef = useRef(false);
+
+  const isDirty =
+    draft.itemId !== seededDraftRef.current.itemId ||
+    draft.quantity !== seededDraftRef.current.quantity;
+
+  const clearDraft = useCallback(() => {
+    seededDraftRef.current = EMPTY_DRAFT;
+    setDraft({ ...EMPTY_DRAFT });
+    setSourceKey('');
+    setError('');
+    onDraftCleared?.();
+  }, [onDraftCleared]);
+
+  const requestClose = useCallback(async () => {
+    if (busy || closingRef.current) return;
+    if (!isDirty) {
+      onClose();
+      return;
+    }
+
+    closingRef.current = true;
+    try {
+      const discard = await confirm({
+        title: t('modal.discardTitle'),
+        confirmLabel: t('modal.discardConfirm'),
+        cancelLabel: t('modal.discardCancel'),
+        danger: true,
+        defaultAction: 'cancel',
+      });
+      if (!discard) return;
+      clearDraft();
+      onClose();
+    } finally {
+      closingRef.current = false;
+    }
+  }, [busy, clearDraft, confirm, isDirty, onClose, t]);
 
   // Convert items to combo options for the dropdown with two-line format
   const itemOptions: ComboOption[] = items.map((item) => {
@@ -65,20 +120,33 @@ export function StockUpdateModal({
     };
   });
 
-  // Initialize draft when modal opens or initialStockRow changes
   useEffect(() => {
-    if (isOpen) {
-      if (initialStockRow) {
-        setDraft({
-          itemId: initialStockRow.itemId,
-          quantity: String(initialStockRow.onHand),
-        });
-      } else {
-        setDraft({ ...EMPTY_DRAFT });
-      }
-      setError('');
+    if (isOpen && !wasOpenRef.current) {
+      const active = document.activeElement;
+      restoreFocusRef.current = active instanceof HTMLElement ? active : null;
     }
-  }, [isOpen, initialStockRow]);
+
+    if (!isOpen && wasOpenRef.current) {
+      const target = restoreFocusRef.current;
+      requestAnimationFrame(() => target?.focus());
+    }
+
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
+
+  // Seed a new draft only when opening against a different source item.
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const nextSourceKey = draftSourceKey(initialStockRow);
+    if (nextSourceKey !== sourceKey) {
+      const nextDraft = buildDraft(initialStockRow);
+      seededDraftRef.current = nextDraft;
+      setDraft(nextDraft);
+      setSourceKey(nextSourceKey);
+    }
+    setError('');
+  }, [initialStockRow, isOpen, sourceKey]);
 
   // Handle Esc key
   useEffect(() => {
@@ -86,18 +154,19 @@ export function StockUpdateModal({
 
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        e.preventDefault();
+        void requestClose();
       }
     };
 
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [isOpen, onClose]);
+  }, [isOpen, requestClose]);
 
   function handleItemSelect(itemId: string) {
     const item = items.find((i) => i.id === itemId);
     if (item) {
-      setDraft({ ...draft, itemId });
+      setDraft((current) => ({ ...current, itemId }));
     }
   }
 
@@ -122,6 +191,7 @@ export function StockUpdateModal({
         openingStock: Number(draft.quantity),
       });
       await onSaved();
+      clearDraft();
       toast(t('modal.toastUpdated'));
       onClose();
     } catch (err) {
@@ -136,7 +206,9 @@ export function StockUpdateModal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/40 p-4"
-      onClick={onClose}
+      onClick={() => {
+        void requestClose();
+      }}
     >
       <form
         onSubmit={onSubmit}
@@ -189,7 +261,7 @@ export function StockUpdateModal({
                   min="0"
                   required
                   value={draft.quantity}
-                  onChange={(e) => setDraft({ ...draft, quantity: e.target.value })}
+                  onChange={(e) => setDraft((current) => ({ ...current, quantity: e.target.value }))}
                   placeholder="0"
                 />
               </div>
@@ -200,7 +272,7 @@ export function StockUpdateModal({
         <ErrorText>{error}</ErrorText>
 
         <div className="flex justify-end gap-3 pt-2">
-          <Button type="button" variant="secondary" onClick={onClose}>
+          <Button type="button" variant="secondary" onClick={() => void requestClose()} disabled={busy}>
             {tc('cancel')}
           </Button>
           <Button type="submit" disabled={busy || !draft.itemId}>
