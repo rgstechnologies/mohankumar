@@ -133,8 +133,8 @@
       "print-settings": "அச்சு அமைப்புகள்",
       "payment-in": "பணம் வரவு",
       "payment-out": "பணம் செலவு",
-      "estimate-payments": "மதிப்பீட்டு பணம் வரவு",
-      "invoice-payments": "விலைப்பட்டியல் பணம் வரவு"
+      "estimate-payments": "பணம் வரவு",
+      "invoice-payments": "பணம் வரவு"
     },
     "roles": {
       "OWNER": "உரிமையாளர்",

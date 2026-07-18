@@ -133,8 +133,8 @@
       "print-settings": "Print Settings",
       "payment-in": "Payment In",
       "payment-out": "Payment Out",
-      "estimate-payments": "Estimate Payment-In",
-      "invoice-payments": "Invoice Payment-In"
+      "estimate-payments": "Payment In",
+      "invoice-payments": "Payment In"
     },
     "roles": {
       "OWNER": "Owner",

@@ -133,8 +133,8 @@
       "print-settings": "प्रिंट सेटिंग्स",
       "payment-in": "भुगतान प्राप्त",
       "payment-out": "भुगतान दिया",
-      "estimate-payments": "अनुमान भुगतान प्राप्त",
-      "invoice-payments": "चालान भुगतान प्राप्त"
+      "estimate-payments": "भुगतान प्राप्त",
+      "invoice-payments": "भुगतान प्राप्त"
     },
     "roles": {
       "OWNER": "मालिक",
