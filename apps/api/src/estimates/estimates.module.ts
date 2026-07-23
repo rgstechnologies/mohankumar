@@ -8,5 +8,6 @@ import { EstimatesService } from './estimates.service';
   imports: [InvoicesModule, AccountingModule],
   controllers: [EstimatesController],
   providers: [EstimatesService],
+  exports: [EstimatesService],
 })
 export class EstimatesModule {}

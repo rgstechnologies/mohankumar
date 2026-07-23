@@ -169,7 +169,6 @@ export function Combobox({
       window.removeEventListener('scroll', onMove, true);
       window.removeEventListener('resize', onMove);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   // Focus the search input/panel after portal mounts (open && coords)
