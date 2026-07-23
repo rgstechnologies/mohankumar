@@ -54,7 +54,10 @@ export function ReportsTab({ companyId }: { companyId: string }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {report === 'gstr1' && <PortalJsonButton companyId={companyId} />}
-          {report === 'gstr1' && <ExportButtons companyId={companyId} report={report} />}
+          <ExportButtons 
+            companyId={companyId} 
+            report={report === 'estimates' ? 'estimate-report' : report === 'sales' ? 'sales-report' : report} 
+          />
         </div>
       </div>
 

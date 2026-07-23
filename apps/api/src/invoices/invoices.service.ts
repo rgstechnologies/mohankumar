@@ -806,7 +806,7 @@ export class InvoicesService {
     const voucherDto = {
       type: VoucherType.RECEIPT,
       date: dto.date,
-      narration: `Payment received against invoice INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
+      narration: `Payment received against invoice AGI/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
       lines: [
         { ledgerId: dto.ledgerId, type: EntryType.DEBIT, amount: dto.amount },
         {
@@ -985,7 +985,7 @@ export class InvoicesService {
     const settled = paidAmount + notesTotal;
     return {
       id: invoice.id,
-      invoiceNo: `INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
+      invoiceNo: `AGI/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
       date: invoice.date,
       dueDate: invoice.dueDate,
       placeOfSupply: invoice.placeOfSupply,

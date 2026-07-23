@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { EmptyState, Pagination, SearchInput, useTable } from '@/components/table';
+import { EmptyState, ExportButtons, Pagination, SearchInput, useTable } from '@/components/table';
 import { useFeedback } from '@/components/feedback';
 import { Button, Card } from '@/components/ui';
 import { RowActions } from '@/components/row-actions';
@@ -106,6 +106,7 @@ export function EstimatesTab({
           onChange={table.setQuery}
           placeholder={t('searchPlaceholder')}
         />
+        <ExportButtons companyId={companyId} report="estimates" />
         {canBill && (
           <Button
             variant="primary"

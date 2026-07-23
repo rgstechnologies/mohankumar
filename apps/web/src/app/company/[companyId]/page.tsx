@@ -105,12 +105,7 @@ const NAV_GROUPS: { group: string; items: { key: Tab; label: string }[] }[] = [
       { key: 'invoice-payments', label: 'invoicePayments' },
     ],
   },
-  {
-    group: 'purchase',
-    items: [
-      { key: 'payment-out', label: 'paymentOut' },
-    ],
-  },
+
   {
     group: 'inventory',
     items: [
@@ -283,7 +278,6 @@ export default function CompanyPage() {
 
   const canPostVouchers = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'CASHIER'].includes(role);
   const canManageLedgers = ['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(role);
-  const isAdminRole = ['OWNER', 'ADMIN'].includes(role);
   const currentGroup = NAV_GROUPS.find((g) => g.items.some((i) => i.key === tab));
 
   if (!companyName) {
@@ -456,7 +450,6 @@ export default function CompanyPage() {
               invoices={invoices}
               canBill={canPostVouchers}
               canCancel={canManageLedgers}
-              canCustomize={isAdminRole}
               onChanged={reload}
             />
           )}

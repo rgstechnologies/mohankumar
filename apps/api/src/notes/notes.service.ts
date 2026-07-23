@@ -349,7 +349,7 @@ export class NotesService {
       isInterState: note.isInterState,
       party: note.party,
       against: note.invoice
-        ? `INV/${note.invoice.fiscalYear}/${String(note.invoice.invoiceNo).padStart(4, '0')}`
+        ? `AGI/${note.invoice.fiscalYear}/${String(note.invoice.invoiceNo).padStart(4, '0')}`
         : note.purchaseBill
           ? `PB/${note.purchaseBill.fiscalYear}/${String(note.purchaseBill.billNo).padStart(4, '0')}`
           : null,

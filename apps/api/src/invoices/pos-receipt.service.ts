@@ -64,7 +64,7 @@ export class PosReceiptService {
     const M = 10;
     const CW = W - M * 2;
     const c = invoice.company;
-    const displayNo = `INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`;
+    const displayNo = `AGI/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`;
     const isWalkIn = invoice.party.name === 'Walk-in Customer';
 
     // Estimate height so the page hugs the content (thermal rolls are continuous).

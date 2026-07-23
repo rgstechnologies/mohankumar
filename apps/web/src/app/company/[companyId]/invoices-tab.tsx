@@ -14,22 +14,12 @@ import {
 import { api, ApiError, downloadFile, printFile } from '@/lib/api';
 import { RowActions } from '@/components/row-actions';
 import { useDeleteDocument } from '@/components/use-delete-document';
-import { InvoiceTemplateCard } from './company-settings-cards';
-
-const STATUS_STYLE: Record<string, string> = {
-  PAID: 'bg-emerald-50 text-emerald-700',
-  PARTIAL: 'bg-amber-50 text-amber-700',
-  UNPAID: 'bg-subtle text-muted',
-  CANCELLED: 'bg-red-50 text-red-600',
-};
-
 export function InvoicesTab({
   companyId,
   ledgers,
   invoices,
   canBill,
   canCancel,
-  canCustomize,
   onChanged,
 }: {
   companyId: string;
@@ -37,7 +27,6 @@ export function InvoicesTab({
   invoices: InvoiceView[];
   canBill: boolean;
   canCancel: boolean;
-  canCustomize: boolean;
   onChanged: () => Promise<void>;
 }) {
   const t = useTranslations('invoices');
@@ -55,7 +44,6 @@ export function InvoicesTab({
   );
   const { toast, confirm } = useFeedback();
 
-  const [showCustomize, setShowCustomize] = useState(false);
   // When sales payments are reconciled against estimates (Profile → Payment
   // linking = estimate), invoices must NOT expose a Make-Payment action — all
   // Payment In flows through the linked sales estimate instead.
@@ -109,11 +97,6 @@ export function InvoicesTab({
           placeholder={t('searchPlaceholder')}
         />
         <ExportButtons companyId={companyId} report="invoices" />
-        {canCustomize && (
-          <Button variant="secondary" onClick={() => setShowCustomize(true)}>
-            {t('customize')}
-          </Button>
-        )}
         {canBill && (
           <Button
             variant="primary"
@@ -123,27 +106,6 @@ export function InvoicesTab({
           </Button>
         )}
       </div>
-
-      {showCustomize && (
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4"
-          onClick={() => setShowCustomize(false)}
-        >
-          <div className="my-6 w-full max-w-3xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-base font-semibold text-white">{t('customizeTitle')}</h2>
-              <button
-                type="button"
-                onClick={() => setShowCustomize(false)}
-                className="rounded-md bg-surface/15 px-3 py-1 text-sm font-medium text-white hover:bg-surface/25"
-              >
-                {tc('close')}
-              </button>
-            </div>
-            <InvoiceTemplateCard companyId={companyId} canManage={canCustomize} />
-          </div>
-        </div>
-      )}
 
       <Card>
         {invoices.length === 0 ? (
@@ -167,8 +129,6 @@ export function InvoicesTab({
                   <th className="py-2">{tc('date')}</th>
                   <th className="py-2">{t('table.customer')}</th>
                   <th className="py-2 text-right">{tc('total')}</th>
-                  <th className="py-2 text-right">{t('table.outstanding')}</th>
-                  <th className="py-2 text-center">{tc('status')}</th>
                   <th className="py-2 text-right">{tc('actions')}</th>
                 </tr>
               </thead>
@@ -387,14 +347,6 @@ function InvoiceRow({
         </td>
         <td className="py-2">{invoice.party.name}</td>
         <td className="py-2 text-right tabular-nums">₹{inr(invoice.total)}</td>
-        <td className="py-2 text-right tabular-nums">₹{inr(invoice.outstanding)}</td>
-        <td className="py-2 text-center">
-          <span
-            className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${STATUS_STYLE[invoice.paymentStatus]}`}
-          >
-            {t(`status.${invoice.paymentStatus}`)}
-          </span>
-        </td>
         <td className="py-2 text-right text-xs whitespace-nowrap">
           <div className="inline-flex items-center justify-end gap-1">
             {invoice.eInvoice?.status === 'GENERATED' && (

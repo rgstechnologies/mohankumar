@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useFeedback } from '@/components/feedback';
 import { AddPartyModal } from '@/components/party-form-modal';
-import { EmptyState } from '@/components/table';
+import { EmptyState, ExportButtons } from '@/components/table';
 import { Button, Card, Combobox, ErrorText, Input, Label, Select } from '@/components/ui';
 import {
   deletePartyPayment,
@@ -591,7 +591,12 @@ export function PaymentPage({
 
       {/* Right: transaction history */}
       <Card>
-        <h3 className="mb-2 text-sm font-semibold text-ink">{t('history')}</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-ink">{t('history')}</h3>
+          {selectedParty && (
+            <ExportButtons companyId={companyId} report="ledger-statement" params={{ ledgerId: selectedParty.ledgerId }} />
+          )}
+        </div>
         {!partyId ? (
           <p className="text-sm text-faint">{t('pickToSeeHistory')}</p>
         ) : (
