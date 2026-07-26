@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { AccountingService } from '../accounting/accounting.service';
 import { BatchesService } from '../inventory/batches.service';
 import { InvoicesService } from '../invoices/invoices.service';
+import { EstimatesService } from '../estimates/estimates.service';
 import { ReportsService } from '../reports/reports.service';
 import type { TableDoc } from './table-doc';
 
@@ -12,8 +13,11 @@ export const EXPORTABLE_REPORTS = [
   'gstr1',
   'gstr3b',
   'invoices',
+  'estimates',
   'stock',
   'ledger-statement',
+  'estimate-report',
+  'sales-report',
 ] as const;
 
 export type ExportableReport = (typeof EXPORTABLE_REPORTS)[number];
@@ -33,6 +37,7 @@ export class ExportsService {
     private readonly reports: ReportsService,
     private readonly invoices: InvoicesService,
     private readonly batches: BatchesService,
+    private readonly estimates: EstimatesService,
     private readonly accounting: AccountingService,
   ) {}
 
@@ -54,10 +59,18 @@ export class ExportsService {
         return this.gstr3b(companyId, query);
       case 'invoices':
         return this.invoiceRegister(companyId);
+      case 'estimates':
+        return this.estimatesRegister(companyId);
       case 'stock':
         return this.stockReport(companyId);
       case 'ledger-statement':
         return this.ledgerStatement(companyId, query);
+      case 'estimate-report':
+        return this.estimateReportExport(companyId);
+      case 'sales-report':
+        return this.salesReportExport(companyId);
+      default:
+        throw new BadRequestException('Invalid report type');
     }
   }
 
@@ -275,6 +288,35 @@ export class ExportsService {
     };
   }
 
+  private async estimatesRegister(companyId: string): Promise<TableDoc> {
+    const estimates = await this.estimates.list(companyId);
+    return {
+      title: 'Estimates Register',
+      fileName: `estimates-register-${today()}`,
+      sheets: [
+        {
+          name: 'Estimates',
+          columns: [
+            { header: 'Estimate No', key: 'estimateNo', width: 1.4 },
+            { header: 'Date', key: 'date', format: 'date' },
+            { header: 'Customer', key: 'customer', width: 1.8 },
+            { header: 'GSTIN', key: 'gstin', width: 1.5 },
+            { header: 'Taxable', key: 'taxableAmount', format: 'currency' },
+            { header: 'CGST', key: 'cgstAmount', format: 'currency' },
+            { header: 'SGST', key: 'sgstAmount', format: 'currency' },
+            { header: 'IGST', key: 'igstAmount', format: 'currency' },
+            { header: 'Total', key: 'total', format: 'currency' },
+            { header: 'Status', key: 'status' },
+          ],
+          rows: estimates.map((est) => ({
+            ...est,
+            customer: est.party.name,
+            gstin: est.party.gstin,
+          })),
+        },
+      ],
+    };
+  }
   private async stockReport(companyId: string): Promise<TableDoc> {
     const stock = await this.batches.stockReport(companyId);
     return {
@@ -353,6 +395,46 @@ export class ExportsService {
             balance: data.closingBalance,
             balanceType: data.closingType === 'DEBIT' ? 'Dr' : 'Cr',
           },
+        },
+      ],
+    };
+  }
+
+  private async estimateReportExport(companyId: string): Promise<TableDoc> {
+    const data = await this.reports.estimateReport(companyId);
+    return {
+      title: 'Estimate Report',
+      fileName: `estimate-report-${today()}`,
+      sheets: [
+        {
+          name: 'Estimate Report',
+          columns: [
+            { header: 'Date', key: 'date', format: 'date' },
+            { header: 'Description', key: 'description', width: 3 },
+            { header: 'Debit', key: 'debit', format: 'currency' },
+            { header: 'Credit', key: 'credit', format: 'currency' },
+          ],
+          rows: data.rows,
+        },
+      ],
+    };
+  }
+
+  private async salesReportExport(companyId: string): Promise<TableDoc> {
+    const data = await this.reports.salesReport(companyId);
+    return {
+      title: 'Sales Report',
+      fileName: `sales-report-${today()}`,
+      sheets: [
+        {
+          name: 'Sales Report',
+          columns: [
+            { header: 'Date', key: 'date', format: 'date' },
+            { header: 'Description', key: 'description', width: 3 },
+            { header: 'Debit', key: 'debit', format: 'currency' },
+            { header: 'Credit', key: 'credit', format: 'currency' },
+          ],
+          rows: data.rows,
         },
       ],
     };

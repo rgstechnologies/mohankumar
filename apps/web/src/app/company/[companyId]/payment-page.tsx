@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useFeedback } from '@/components/feedback';
 import { AddPartyModal } from '@/components/party-form-modal';
-import { EmptyState } from '@/components/table';
+import { EmptyState, ExportButtons } from '@/components/table';
 import { Button, Card, Combobox, ErrorText, Input, Label, Select } from '@/components/ui';
 import {
   deletePartyPayment,
@@ -82,9 +82,9 @@ export function PaymentPage({
   const people = useMemo(
     () =>
       parties.filter(
-        (p) => p.type === partyType && (!docKind || p.docType === docKind),
+        (p) => p.type === partyType,
       ),
-    [parties, partyType, docKind],
+    [parties, partyType],
   );
   const cashLedger = useMemo(
     () => ledgers.find((l) => l.group.name === 'Cash-in-Hand'),
@@ -122,6 +122,8 @@ export function PaymentPage({
   const [openDocs, setOpenDocs] = useState<OpenDoc[]>([]);
   const [history, setHistory] = useState<HistoryDoc[]>([]);
   const [payHistory, setPayHistory] = useState<PartyPaymentView[]>([]);
+  /** Screen-specific outstanding: sum of outstanding for this screen's doc type only. */
+  const [screenBalance, setScreenBalance] = useState<number | null>(null);
   const [loadingParty, setLoadingParty] = useState(false);
 
   // Preselect a party when arriving from a customer/vendor row (?party=…).
@@ -142,12 +144,25 @@ export function PaymentPage({
         setOpenDocs([]);
         setHistory([]);
         setPayHistory([]);
+        setScreenBalance(null);
         return;
       }
       setLoadingParty(true);
       try {
         const pays = await fetchPartyPayments(companyId, pid).catch(() => []);
-        setPayHistory(pays);
+        // Filter payment history to match only this screen's scope:
+        // - Estimate Banking: payments where source === 'estimate' or estimateId is set (legacy).
+        // - Invoice Banking:  payments where source === 'invoice' or both source and estimateId are null (legacy).
+        const screenPays = pays.filter((p) => {
+          if (useEstimate) {
+            return !!p.estimateId || p.source === 'estimate';
+          } else if (isIn) {
+            return !p.estimateId && (p.source === 'invoice' || p.source === null);
+          }
+          // Payment-Out: show all payment-direction entries.
+          return p.direction === 'PAYMENT';
+        });
+        setPayHistory(screenPays);
         // Money paid so far against a specific estimate.
         const paidFor = (docId: string) =>
           pays
@@ -170,11 +185,14 @@ export function PaymentPage({
             };
           });
           setOpenDocs(rows.filter((r) => r.outstanding > 0));
-          setHistory(
-            rows
-              .map((r) => ({ no: r.no, date: r.date, total: r.total, paid: r.paid, outstanding: r.outstanding, isBill: false }))
-              .sort((a, b) => b.date.localeCompare(a.date)),
-          );
+          const histRows = rows
+            .map((r) => ({ no: r.no, date: r.date, total: r.total, paid: r.paid, outstanding: r.outstanding, isBill: false }))
+            .sort((a, b) => b.date.localeCompare(a.date));
+          setHistory(histRows);
+          // Balance = Σ estimate totals (debit) − Σ all estimate-screen payments (credit).
+          const totalDebit = rows.reduce((s, r) => s + r.total, 0);
+          const totalCredit = screenPays.reduce((s, p) => s + p.amount, 0);
+          setScreenBalance(Math.round((totalDebit - totalCredit) * 100) / 100);
         } else {
           const invs = (await fetchInvoices(companyId))
             .filter((i) => i.party.id === pid && i.status !== 'CANCELLED');
@@ -183,11 +201,15 @@ export function PaymentPage({
               .filter((i) => i.outstanding > 0)
               .map((i) => ({ id: i.id, no: i.invoiceNo, date: i.date, total: i.total, outstanding: i.outstanding, kind: 'invoice' as const })),
           );
-          setHistory(
-            invs
-              .map((i) => ({ no: i.invoiceNo, date: i.date, total: i.total, paid: i.total - i.outstanding, outstanding: i.outstanding, isBill: false }))
-              .sort((a, b) => b.date.localeCompare(a.date)),
-          );
+          const histRows = invs
+            .map((i) => ({ no: i.invoiceNo, date: i.date, total: i.total, paid: i.total - i.outstanding, outstanding: i.outstanding, isBill: false }))
+            .sort((a, b) => b.date.localeCompare(a.date));
+          setHistory(histRows);
+          // Balance = Σ invoice outstanding (already net of linked payments) − unlinked advances.
+          const totalOutstanding = invs.reduce((s, i) => s + i.outstanding, 0);
+          const unlinkedPaid = screenPays.reduce((s, p) => s + p.amount, 0);
+          setScreenBalance(Math.round((totalOutstanding - unlinkedPaid) * 100) / 100);
+        }
         }
       } finally {
         setLoadingParty(false);
@@ -268,6 +290,7 @@ export function PaymentPage({
           await api.post(`/companies/${companyId}/parties/${partyId}/payments`, {
             amount: pay,
             estimateId: d.id,
+            source: 'estimate',
             ...base,
           });
           remaining = Math.round((remaining - pay) * 100) / 100;
@@ -275,6 +298,7 @@ export function PaymentPage({
         if (remaining > 0) {
           await api.post(`/companies/${companyId}/parties/${partyId}/payments`, {
             amount: remaining,
+            source: 'estimate',
             ...base,
           });
         }
@@ -293,6 +317,7 @@ export function PaymentPage({
         if (Number(advance) > 0) {
           await api.post(`/companies/${companyId}/parties/${partyId}/payments`, {
             amount: Number(advance),
+            source: 'invoice',
             ...base,
           });
         }
@@ -546,16 +571,21 @@ export function PaymentPage({
 
       {/* Right: transaction history */}
       <Card>
-        <h3 className="mb-2 text-sm font-semibold text-ink">{t('history')}</h3>
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-ink">{t('history')}</h3>
+          {selectedParty && (
+            <ExportButtons companyId={companyId} report="ledger-statement" params={{ ledgerId: selectedParty.ledgerId }} />
+          )}
+        </div>
         {!partyId ? (
           <p className="text-sm text-faint">{t('pickToSeeHistory')}</p>
         ) : (
           <div className="space-y-3 text-sm">
-            {selectedParty && (
+            {selectedParty && screenBalance !== null && (
               <div className="rounded-md bg-subtle p-2 text-xs text-muted">
                 {t('currentBalance')}:{' '}
                 <strong className="text-ink">
-                  ₹{inr(selectedParty.outstanding)}
+                  ₹{inr(screenBalance)}
                 </strong>
               </div>
             )}

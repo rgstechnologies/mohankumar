@@ -133,8 +133,8 @@
       "print-settings": "प्रिंट सेटिंग्स",
       "payment-in": "भुगतान प्राप्त",
       "payment-out": "भुगतान दिया",
-      "estimate-payments": "अनुमान भुगतान प्राप्त",
-      "invoice-payments": "चालान भुगतान प्राप्त"
+      "estimate-payments": "भुगतान प्राप्त",
+      "invoice-payments": "भुगतान प्राप्त"
     },
     "roles": {
       "OWNER": "मालिक",
@@ -1593,9 +1593,14 @@
       "profit-loss": "लाभ और हानि",
       "balance-sheet": "बैलेंस शीट",
       "gstr1": "GSTR-1",
-      "gstr3b": "GSTR-3B"
+      "gstr3b": "GSTR-3B",
+      "estimates": "अनुमान रिपोर्ट",
+      "sales": "बिक्री रिपोर्ट"
     },
     "loadingReport": "रिपोर्ट लोड हो रही है…",
+    "totalDebit": "कुल नामे",
+    "totalCredit": "कुल जमा",
+    "totalMoney": "कुल राशि (जमा - नामे)",
     "trialBalanceAsOf": "{date} तक का तलपट",
     "ledger": "खाता-बही",
     "group": "समूह",
@@ -2579,6 +2584,7 @@
     "applyTaxHint": "कर-मुक्त अनुमान के लिए बंद करें",
     "items": "वस्तुएँ",
     "freeText": "मुक्त-पाठ पंक्ति",
+    "selectItem": "आइटम चुनें…",
     "itemSearchPlaceholder": "आइटम नाम, कोड या HSN से खोजें…",
     "noItemsFound": "कोई आइटम नहीं मिला",
     "itemOptionCode": "कोड: {code}",

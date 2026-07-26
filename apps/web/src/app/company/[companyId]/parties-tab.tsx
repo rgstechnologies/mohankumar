@@ -264,7 +264,7 @@ export function PartiesTab({
         city: draft.city || undefined,
         pincode: draft.pincode || undefined,
         // null clears the override → inherit the company default.
-        balanceDocType: draft.balanceDocType || null,
+        balanceDocType: null,
       };
       if (draft.id) {
         await api.patch(`/companies/${companyId}/parties/${draft.id}`, {
@@ -554,30 +554,7 @@ export function PartiesTab({
               </div>
             )}
 
-            {/* Outstanding tracked-against document type */}
-            <div>
-              <Label>{t('balanceDocType.label')} <HelpTip text={t('balanceDocType.help')} /></Label>
-              <select
-                value={draft.balanceDocType}
-                onChange={(e) =>
-                  setDraft({ ...draft, balanceDocType: e.target.value as PartyDraft['balanceDocType'] })
-                }
-                className="w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-100"
-              >
-                <option value="">{t('balanceDocType.default')}</option>
-                {draft.type === 'CUSTOMER' ? (
-                  <>
-                    <option value="estimate">{t('balanceDocType.estimate')}</option>
-                    <option value="invoice">{t('balanceDocType.invoice')}</option>
-                  </>
-                ) : (
-                  <>
-                    <option value="purchaseEstimate">{t('balanceDocType.purchaseEstimate')}</option>
-                    <option value="purchase">{t('balanceDocType.purchase')}</option>
-                  </>
-                )}
-              </select>
-            </div>
+
 
             {/* Photo / logo */}
             {draft.type !== 'CUSTOMER' && (
@@ -714,10 +691,12 @@ function PartyRowItem({
   const isCustomer = party.type === 'CUSTOMER';
 
   // Open the dedicated Payment In/Out page with this party pre-selected.
-  const openPaymentPage = () =>
-    router.push(
-      `/company/${companyId}?tab=payment-${isCustomer ? 'in' : 'out'}&party=${party.id}`,
-    );
+  const openPaymentPage = () => {
+    const targetTab = isCustomer
+      ? (party.docType === 'estimate' ? 'estimate-payments' : 'invoice-payments')
+      : 'payment-out';
+    router.push(`/company/${companyId}?tab=${targetTab}&party=${party.id}`);
+  };
 
   const [showPay, setShowPay] = useState(false);
   const [amount, setAmount] = useState('');

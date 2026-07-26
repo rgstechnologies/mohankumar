@@ -173,7 +173,11 @@ export class PartyBalanceService {
     const rows = await this.prisma.estimate.findMany({
       where: { companyId, partyId, status: EST_ACTIVE },
       select: {
-        id: true, estimateNo: true, fiscalYear: true, date: true, total: true,
+        id: true,
+        estimateNo: true,
+        fiscalYear: true,
+        date: true,
+        total: true,
         payments: { select: { amount: true } },
       },
       orderBy: { date: 'asc' },
