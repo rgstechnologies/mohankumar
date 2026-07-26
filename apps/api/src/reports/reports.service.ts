@@ -1,3 +1,4 @@
+import { DOCUMENT_PREFIX, formatDocumentNo } from '@bookly/shared';
 import { Injectable } from '@nestjs/common';
 import {
   AccountNature,
@@ -123,11 +124,14 @@ export class ReportsService {
   // Trial Balance
   // -------------------------------------------------------------
 
-  async trialBalance(companyId: string, asOf?: string) {
+  async trialBalance(companyId: string, asOf?: string, from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : asOf ? new Date(asOf) : undefined;
     const [nets, openingDiff] = await Promise.all([
       this.ledgerNets(companyId, {
-        to: asOf ? new Date(asOf) : undefined,
-        includeOpening: true,
+        from: fromDate,
+        to: toDate,
+        includeOpening: !fromDate,
       }),
       this.openingDifference(companyId),
     ]);
@@ -150,7 +154,9 @@ export class ReportsService {
       });
     }
     return {
-      asOf: asOf ?? new Date().toISOString().slice(0, 10),
+      asOf: asOf ?? to ?? new Date().toISOString().slice(0, 10),
+      from: from ?? null,
+      to: to ?? null,
       rows,
       totalDebit: r2(rows.reduce((s, row) => s + row.debit, 0)),
       totalCredit: r2(rows.reduce((s, row) => s + row.credit, 0)),
@@ -195,10 +201,13 @@ export class ReportsService {
   // Balance Sheet (as of date, all history)
   // -------------------------------------------------------------
 
-  async balanceSheet(companyId: string, asOf?: string) {
+  async balanceSheet(companyId: string, asOf?: string, from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : asOf ? new Date(asOf) : undefined;
     const [nets, openingDiff] = await Promise.all([
       this.ledgerNets(companyId, {
-        to: asOf ? new Date(asOf) : undefined,
+        from: fromDate,
+        to: toDate,
         includeOpening: true,
       }),
       this.openingDifference(companyId),
@@ -211,8 +220,6 @@ export class ReportsService {
       .filter((n) => n.nature === AccountNature.LIABILITY && n.net !== 0)
       .map((n) => ({ ledger: n.name, group: n.groupName, amount: r2(-n.net) }));
 
-    // Accumulated P&L (income − expenses over all history incl. openings)
-    // sits on the liabilities side, keeping the sheet balanced.
     const plNet = r2(
       nets
         .filter(
@@ -223,7 +230,6 @@ export class ReportsService {
         .reduce((s, n) => s - n.net, 0),
     );
 
-    // Contra-less opening balances land here, exactly as Tally shows them.
     if (openingDiff !== 0) {
       liabilities.push({
         ledger: 'Difference in Opening Balances',
@@ -237,7 +243,9 @@ export class ReportsService {
       liabilities.reduce((s, x) => s + x.amount, 0) + plNet,
     );
     return {
-      asOf: asOf ?? new Date().toISOString().slice(0, 10),
+      asOf: asOf ?? to ?? new Date().toISOString().slice(0, 10),
+      from: from ?? null,
+      to: to ?? null,
       assets,
       liabilities,
       profitAndLoss: plNet,
@@ -270,7 +278,7 @@ export class ReportsService {
     const b2b = invoices
       .filter((inv) => inv.party.gstin)
       .map((inv) => ({
-        invoiceNo: `INV/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: formatDocumentNo(DOCUMENT_PREFIX.INVOICE, inv.fiscalYear, inv.invoiceNo),
         date: inv.date,
         gstin: inv.party.gstin,
         party: inv.party.name,
@@ -327,7 +335,7 @@ export class ReportsService {
       to: toDate.toISOString().slice(0, 10),
       b2b,
       creditNotes: creditNotes.map((n) => ({
-        noteNo: `CRN/${n.fiscalYear}/${String(n.noteNo).padStart(4, '0')}`,
+        noteNo: formatDocumentNo(DOCUMENT_PREFIX.CREDIT_NOTE, n.fiscalYear, n.noteNo),
         date: n.date,
         gstin: n.party.gstin,
         party: n.party.name,
@@ -549,7 +557,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((e) => ({
         id: e.id,
-        invoiceNo: `EST/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
+        invoiceNo: formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, e.fiscalYear, e.estimateNo),
         date: e.date,
         party: e.party.name,
         total: Number(e.total),
@@ -564,7 +572,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((inv) => ({
         id: inv.id,
-        invoiceNo: `INV/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: formatDocumentNo(DOCUMENT_PREFIX.INVOICE, inv.fiscalYear, inv.invoiceNo),
         date: inv.date,
         party: inv.party.name,
         total: Number(inv.total),

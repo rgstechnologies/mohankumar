@@ -1,3 +1,4 @@
+import { DOCUMENT_PREFIX, formatDocumentNo } from '@bookly/shared';
 import { Injectable } from '@nestjs/common';
 import { EstimateStatus, InvoiceStatus, PartyType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -159,7 +160,7 @@ export class PartyBalanceService {
             r.creditNotes.reduce((s, n) => s + Number(n.total), 0);
           return {
             id: r.id,
-            no: `INV/${r.fiscalYear}/${String(r.invoiceNo).padStart(4, '0')}`,
+            no: formatDocumentNo(DOCUMENT_PREFIX.INVOICE, r.fiscalYear, r.invoiceNo),
             date: r.date,
             total: Number(r.total),
             paid: r2(paid),
@@ -182,7 +183,7 @@ export class PartyBalanceService {
         const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
         return {
           id: r.id,
-          no: `EST/${r.fiscalYear}/${String(r.estimateNo).padStart(4, '0')}`,
+          no: formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, r.fiscalYear, r.estimateNo),
           date: r.date,
           total: Number(r.total),
           paid: r2(paid),

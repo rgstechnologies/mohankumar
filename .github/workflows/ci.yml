@@ -4,8 +4,9 @@ name: CI
 # these checks required, so nothing reaches main without them passing.
 on:
   push:
-    branches: [main]
+    branches: [main, development]
   pull_request:
+    branches: [main, development]
 
 concurrency:
   # A new push to the same PR cancels the previous run — no queue backlog.

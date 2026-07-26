@@ -1,3 +1,4 @@
+import { DOCUMENT_PREFIX, formatDocumentNo } from '@bookly/shared';
 import {
   BadRequestException,
   Injectable,
@@ -983,7 +984,11 @@ export class InvoicesService {
     const settled = paidAmount + notesTotal;
     return {
       id: invoice.id,
-      invoiceNo: `INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
+      invoiceNo: formatDocumentNo(
+        DOCUMENT_PREFIX.INVOICE,
+        invoice.fiscalYear,
+        invoice.invoiceNo,
+      ),
       date: invoice.date,
       dueDate: invoice.dueDate,
       placeOfSupply: invoice.placeOfSupply,

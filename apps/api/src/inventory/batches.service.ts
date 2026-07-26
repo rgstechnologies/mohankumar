@@ -264,7 +264,6 @@ export class BatchesService {
     }
 
     return items.map((item) => {
-      const purchasedQty = 0;
       const creditInQty = creditInMap.get(item.id) ?? 0;
       const debitOutQty = debitOutMap.get(item.id) ?? 0;
       const soldQty = outByItem.get(item.id) ?? 0;

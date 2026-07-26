@@ -1,3 +1,4 @@
+import { DOCUMENT_PREFIX, formatDocumentNo } from '@bookly/shared';
 import {
   BadRequestException,
   Injectable,
@@ -581,7 +582,7 @@ export class EstimatesService {
   }
 
   private displayNo(fiscalYear: string, no: number) {
-    return `EST/${fiscalYear}/${String(no).padStart(4, '0')}`;
+    return formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, fiscalYear, no);
   }
 
   private readonly fullInclude = {
@@ -670,7 +671,11 @@ export class EstimatesService {
       invoice: estimate.invoice
         ? {
             id: estimate.invoice.id,
-            invoiceNo: `INV/${estimate.invoice.fiscalYear}/${String(estimate.invoice.invoiceNo).padStart(4, '0')}`,
+            invoiceNo: formatDocumentNo(
+              DOCUMENT_PREFIX.INVOICE,
+              estimate.invoice.fiscalYear,
+              estimate.invoice.invoiceNo,
+            ),
           }
         : null,
       subtotal: Number(estimate.subtotal),

@@ -299,10 +299,16 @@ export function DocEntryForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [companyId, editId]);
 
-  const selectedCustomer = useMemo(
-    () => customers.find((c) => c.id === partyId) ?? null,
-    [customers, partyId],
+  const customerMap = useMemo(
+    () => new Map(customers.map((c) => [c.id, c])),
+    [customers],
   );
+  const itemMap = useMemo(
+    () => new Map(items.map((it) => [it.id, it])),
+    [items],
+  );
+
+  const selectedCustomer = partyId ? customerMap.get(partyId) ?? null : null;
 
   const taxedLines = config.noTax ? false : config.taxToggle && !applyTax ? false : true;
 
@@ -329,7 +335,7 @@ export function DocEntryForm({
         if (i !== index) return line;
         const next = { ...line, ...patch };
         if (patch.itemId !== undefined) {
-          const item = items.find((it) => it.id === patch.itemId);
+          const item = patch.itemId ? itemMap.get(patch.itemId) : undefined;
           next.batchNo = '';
           if (item) {
             next.description = '';
@@ -673,7 +679,7 @@ export function DocEntryForm({
               </thead>
               <tbody>
                 {lines.map((line, i) => {
-                  const item = items.find((it) => it.id === line.itemId);
+                  const item = line.itemId ? itemMap.get(line.itemId) : undefined;
                   const c = lineCalc(line);
                   return (
                     <tr key={i} className="border-b border-line align-top">

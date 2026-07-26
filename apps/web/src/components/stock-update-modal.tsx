@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useFeedback } from '@/components/feedback';
 import { Button, ErrorText, Input, Label, Combobox, type ComboOption } from '@/components/ui';
@@ -120,6 +120,12 @@ export function StockUpdateModal({
     };
   });
 
+  const itemMap = useMemo(
+    () => new Map(items.map((i) => [i.id, i])),
+    [items],
+  );
+  const selectedItem = draft.itemId ? itemMap.get(draft.itemId) : undefined;
+
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
       const active = document.activeElement;
@@ -164,7 +170,7 @@ export function StockUpdateModal({
   }, [isOpen, requestClose]);
 
   function handleItemSelect(itemId: string) {
-    const item = items.find((i) => i.id === itemId);
+    const item = itemMap.get(itemId);
     if (item) {
       setDraft((current) => ({ ...current, itemId }));
     }
@@ -238,7 +244,7 @@ export function StockUpdateModal({
                 <div>
                   <Label>{t('modal.itemCode')}</Label>
                   <Input
-                    value={items.find((i) => i.id === draft.itemId)?.sku ?? ''}
+                    value={selectedItem?.sku ?? ''}
                     disabled
                     className="bg-subtle"
                   />
@@ -246,7 +252,7 @@ export function StockUpdateModal({
                 <div>
                   <Label>{t('modal.hsn')}</Label>
                   <Input
-                    value={items.find((i) => i.id === draft.itemId)?.hsnCode ?? ''}
+                    value={selectedItem?.hsnCode ?? ''}
                     disabled
                     className="bg-subtle"
                   />

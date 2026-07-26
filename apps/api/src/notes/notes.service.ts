@@ -1,3 +1,4 @@
+import { DOCUMENT_PREFIX } from '@bookly/shared';
 import {
   BadRequestException,
   Injectable,
@@ -19,8 +20,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import type { CreateNoteDto } from './dto/note.dto';
 
 const PREFIX: Record<NoteType, string> = {
-  CREDIT_NOTE: 'CRN',
-  DEBIT_NOTE: 'DBN',
+  CREDIT_NOTE: DOCUMENT_PREFIX.CREDIT_NOTE,
+  DEBIT_NOTE: DOCUMENT_PREFIX.DEBIT_NOTE,
 };
 
 @Injectable()

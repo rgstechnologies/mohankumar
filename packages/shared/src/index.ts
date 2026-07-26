@@ -65,3 +65,35 @@ export interface HealthResponse {
 
 // Print Template Designer schema (shared between editor and PDF renderer).
 export * from './print-design';
+
+/** Standard document type prefixes used across display numbering. */
+export const DOCUMENT_PREFIX = {
+  INVOICE: 'INV',
+  ESTIMATE: 'EST',
+  CREDIT_NOTE: 'CRN',
+  DEBIT_NOTE: 'DBN',
+  PAYMENT: 'PMT',
+  RECEIPT: 'RCT',
+  JOURNAL: 'JNL',
+  CONTRA: 'CON',
+  SALES: 'SAL',
+  PURCHASE: 'PUR',
+  PROFORMA: 'PI',
+  PURCHASE_ESTIMATE: 'PEST',
+  DELIVERY_CHALLAN: 'DC',
+  SALES_ORDER: 'SO',
+  PURCHASE_BILL: 'BILL',
+  PURCHASE_ORDER: 'PO',
+} as const;
+
+export type DocumentPrefixKey = keyof typeof DOCUMENT_PREFIX;
+
+/** Format a document number string: PREFIX/fiscalYear/0000 */
+export function formatDocumentNo(
+  prefix: string,
+  fiscalYear: string,
+  no: number | string,
+): string {
+  return `${prefix}/${fiscalYear}/${String(no).padStart(4, '0')}`;
+}
+

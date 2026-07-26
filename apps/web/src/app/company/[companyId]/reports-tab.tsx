@@ -15,6 +15,8 @@ const REPORTS: Report[] = ['trial-balance', 'profit-loss', 'balance-sheet', 'gst
 export function ReportsTab({ companyId }: { companyId: string }) {
   const t = useTranslations('reports');
   const [report, setReport] = useState<Report>('trial-balance');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   // Data is tagged with the report it belongs to — switching reports renders
   // the loading state until the matching response arrives, and a slow stale
   // response can never be shown under the wrong report.
@@ -24,11 +26,15 @@ export function ReportsTab({ companyId }: { companyId: string }) {
   } | null>(null);
 
   const load = useCallback(async () => {
+    const params = new URLSearchParams();
+    if (fromDate) params.set('from', fromDate);
+    if (toDate) params.set('to', toDate);
+    const qs = params.toString() ? `?${params.toString()}` : '';
     const payload = await api.get<Record<string, unknown>>(
-      `/companies/${companyId}/reports/${report}`,
+      `/companies/${companyId}/reports/${report}${qs}`,
     );
     setData({ report, payload });
-  }, [companyId, report]);
+  }, [companyId, report, fromDate, toDate]);
 
   useEffect(() => {
     void load();
@@ -53,8 +59,28 @@ export function ReportsTab({ companyId }: { companyId: string }) {
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            placeholder="From Date"
+            className="rounded-lg border border-line-strong bg-surface px-2 py-1.5 text-xs shadow-sm outline-none focus:border-brand-500"
+            aria-label="From Date"
+          />
+          <input
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            placeholder="To Date"
+            className="rounded-lg border border-line-strong bg-surface px-2 py-1.5 text-xs shadow-sm outline-none focus:border-brand-500"
+            aria-label="To Date"
+          />
           {report === 'gstr1' && <PortalJsonButton companyId={companyId} />}
-          <ExportButtons companyId={companyId} report={report} />
+          <ExportButtons
+            companyId={companyId}
+            report={report}
+            params={{ from: fromDate || undefined, to: toDate || undefined }}
+          />
         </div>
       </div>
 
