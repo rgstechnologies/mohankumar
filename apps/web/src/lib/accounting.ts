@@ -65,9 +65,9 @@ export interface PartyRow {
   /** Strict document-based outstanding (estimate/invoice etc.) — what every
    *  balance display shows. `balance`/`balanceType` is the raw ledger net. */
   outstanding: number;
-  docType: 'invoice' | 'estimate' | 'purchase' | 'purchaseEstimate';
+  docType: 'invoice' | 'estimate';
   /** Per-party override; null = inherits the company default. */
-  balanceDocType: 'invoice' | 'estimate' | 'purchase' | 'purchaseEstimate' | null;
+  balanceDocType: 'invoice' | 'estimate' | null;
   balance: number;
   balanceType: 'DEBIT' | 'CREDIT';
   loyaltyPoints: number;
@@ -90,10 +90,10 @@ export interface PartyDetail {
   pincode: string | null;
   image: string | null;
   loyaltyPoints: number;
-  balanceDocType: 'invoice' | 'estimate' | 'purchase' | 'purchaseEstimate' | null;
+  balanceDocType: 'invoice' | 'estimate' | null;
   ledger: { id: string; name: string };
   /** Resolved tracked doc type + document-based outstanding for this party. */
-  docType: 'invoice' | 'estimate' | 'purchase' | 'purchaseEstimate';
+  docType: 'invoice' | 'estimate';
   outstanding: number;
   documents: {
     id: string;
@@ -111,7 +111,7 @@ export const fetchParty = (companyId: string, partyId: string) =>
 /** A party's document-based statement (its tracked doc type only). */
 export interface PartyStatement {
   party: { id: string; name: string; type: 'CUSTOMER' | 'VENDOR' };
-  docType: 'invoice' | 'estimate' | 'purchase' | 'purchaseEstimate';
+  docType: 'invoice' | 'estimate';
   outstanding: number;
   documents: {
     id: string;
@@ -251,11 +251,6 @@ export interface InvoiceView {
   lines: InvoiceLineView[];
 }
 
-export interface PurchaseBillView extends Omit<InvoiceView, 'invoiceNo'> {
-  billNo: string;
-  supplierBillNo: string | null;
-}
-
 export type EstimateStatus =
   | 'OPEN'
   | 'ACCEPTED'
@@ -299,28 +294,6 @@ export interface ProformaInvoiceView {
   party: { id: string; name: string; gstin: string | null };
   branch: { id: string; name: string } | null;
   invoice: { id: string; invoiceNo: string } | null;
-  subtotal: number;
-  taxableAmount: number;
-  cgstAmount: number;
-  sgstAmount: number;
-  igstAmount: number;
-  roundOff: number;
-  total: number;
-  notes: string | null;
-  lines: InvoiceLineView[];
-}
-
-export interface PurchaseEstimateView {
-  id: string;
-  estimateNo: string;
-  date: string;
-  validUntil: string | null;
-  isInterState: boolean;
-  status: EstimateStatus;
-  isExpired: boolean;
-  party: { id: string; name: string; gstin: string | null };
-  branch: { id: string; name: string } | null;
-  bill: { id: string; billNo: string } | null;
   subtotal: number;
   taxableAmount: number;
   cgstAmount: number;
@@ -479,9 +452,6 @@ export interface StockTransferView {
 
 export const fetchNotes = (companyId: string) =>
   api.get<NoteView[]>(`/companies/${companyId}/notes`);
-
-export const fetchPurchaseBills = (companyId: string) =>
-  api.get<PurchaseBillView[]>(`/companies/${companyId}/purchase-bills`);
 
 export const fetchStock = (companyId: string) =>
   api.get<StockRow[]>(`/companies/${companyId}/stock`);

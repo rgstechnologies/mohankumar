@@ -39,10 +39,7 @@ export type DocEntryKind =
   | 'estimate'
   | 'salesOrder'
   | 'deliveryChallan'
-  | 'proformaInvoice'
-  | 'purchaseEstimate'
-  | 'purchaseOrder'
-  | 'purchaseBill';
+  | 'proformaInvoice';
 
 export interface DocEntryConfig {
   kind: DocEntryKind;
@@ -56,13 +53,13 @@ export interface DocEntryConfig {
   secondDate?: 'validUntil' | 'expectedDate';
   /** Delivery challan carries a vehicle number. */
   vehicle?: boolean;
-  /** Estimate/purchase-estimate: GST is optional, controlled by a toggle. */
+  /** Estimate: GST is optional, controlled by a toggle. */
   taxToggle?: boolean;
-  /** Purchase order: no GST at all (logistics document). */
+  /** Logistical tax-free documents. */
   noTax?: boolean;
-  /** Purchase bill: a supplier's own bill number. */
+  /** Supplier bill number for purchase entries. */
   supplierBillNo?: boolean;
-  /** Purchase bill: prefill a new form from an AI-scanned draft in sessionStorage. */
+  /** Prefill a new form from an AI-scanned draft in sessionStorage. */
   aiScanDraft?: boolean;
   /** Freight & other (non-taxed, post-tax) charges in the totals. */
   extraCharges?: boolean;
@@ -76,7 +73,7 @@ export interface DocEntryConfig {
   loyalty?: boolean;
   /** Sales batch picking (pick existing) — invoices. */
   batches?: boolean;
-  /** Purchase batch entry (enter new batch + expiry) — purchase bills. */
+  /** Purchase batch entry. */
   purchaseBatch?: boolean;
 }
 
@@ -243,49 +240,6 @@ export function DocEntryForm({
                 });
             })
             .catch(() => {});
-        }
-
-        // AI-scanned bill: prefill a NEW form from the draft stashed by the tab.
-        if (config.aiScanDraft && !editId && typeof window !== 'undefined') {
-          const key = `purchase-bill-draft:${companyId}`;
-          const raw = window.sessionStorage.getItem(key);
-          if (raw) {
-            window.sessionStorage.removeItem(key);
-            try {
-              const d = JSON.parse(raw) as {
-                vendor?: { partyId?: string | null };
-                supplierBillNo?: string;
-                date?: string;
-                lines?: {
-                  itemId?: string | null;
-                  description?: string;
-                  quantity?: number;
-                  rate?: number;
-                  gstRate?: number | null;
-                }[];
-              };
-              if (d.vendor?.partyId && parties.some((p) => p.id === d.vendor!.partyId))
-                setPartyId(d.vendor.partyId);
-              if (d.supplierBillNo) setSupplierBillNo(d.supplierBillNo);
-              if (d.date) setDate(d.date.slice(0, 10));
-              if (Array.isArray(d.lines) && d.lines.length > 0) {
-                setLines(
-                  d.lines.map((l) => ({
-                    itemId: l.itemId ?? '',
-                    description: l.itemId ? '' : l.description ?? '',
-                    quantity: l.quantity != null ? String(l.quantity) : '1',
-                    rate: l.rate != null ? String(l.rate) : '',
-                    discountPct: '0',
-                    gstRate: l.gstRate != null ? String(l.gstRate) : '0',
-                    batchNo: '',
-                    expiryDate: '',
-                  })),
-                );
-              }
-            } catch {
-              /* malformed draft — start blank */
-            }
-          }
         }
 
         if (editId) {
@@ -778,23 +732,6 @@ export function DocEntryForm({
                                 </option>
                               ))}
                           </Select>
-                        )}
-                        {config.purchaseBatch && item?.trackBatches && (
-                          <div className="mt-1 flex gap-1">
-                            <Input
-                              value={line.batchNo}
-                              onChange={(e) => updateLine(i, { batchNo: e.target.value })}
-                              placeholder={t('batchNo')}
-                              className="w-1/2"
-                            />
-                            <Input
-                              type="date"
-                              value={line.expiryDate}
-                              onChange={(e) => updateLine(i, { expiryDate: e.target.value })}
-                              title={t('expiryDate')}
-                              className="w-1/2"
-                            />
-                          </div>
                         )}
                       </td>
                       <td className="py-1.5 pr-2 pl-8">

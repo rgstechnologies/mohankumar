@@ -3,6 +3,7 @@ import { InvoiceStatus, NoteType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 const q3 = (n: number) => Math.round(n * 1000) / 1000;
+const r2 = (n: number) => Math.round(n * 100) / 100;
 const DAY = 24 * 3600 * 1000;
 
 export interface BatchStock {
@@ -16,7 +17,7 @@ export interface BatchStock {
 
 /**
  * Batch (lot) stock arithmetic. Batch quantity =
- * purchased − sold + sales-returns (CN) − purchase-returns (DN),
+ * purchased/opening − sold + sales-returns (CN) − purchase-returns (DN),
  * over ISSUED documents only.
  */
 @Injectable()
@@ -40,15 +41,7 @@ export class BatchesService {
     const ids = batches.map((b) => b.id);
     if (ids.length === 0) return new Map();
 
-    const [purchased, sold, creditIn, debitOut] = await Promise.all([
-      this.prisma.purchaseBillLine.groupBy({
-        by: ['batchId'],
-        where: {
-          batchId: { in: ids },
-          bill: { status: InvoiceStatus.ISSUED },
-        },
-        _sum: { quantity: true },
-      }),
+    const [sold, creditIn, debitOut] = await Promise.all([
       this.prisma.invoiceLine.groupBy({
         by: ['batchId'],
         where: {
@@ -85,7 +78,6 @@ export class BatchesService {
         );
       }
     };
-    apply(purchased, 1);
     apply(sold, -1);
     apply(creditIn, 1);
     apply(debitOut, -1);
@@ -115,7 +107,7 @@ export class BatchesService {
     }));
   }
 
-  /** Find-or-create a batch at purchase time. */
+  /** Find-or-create a batch. */
   async upsertBatch(
     companyId: string,
     itemId: string,
@@ -132,7 +124,6 @@ export class BatchesService {
         batchNo: trimmed,
         expiryDate: expiryDate ? new Date(expiryDate) : null,
       },
-      // Existing batch keeps its expiry unless this purchase supplies one.
       update: expiryDate ? { expiryDate: new Date(expiryDate) } : {},
     });
   }
@@ -151,7 +142,7 @@ export class BatchesService {
     });
     if (!batch || batch.companyId !== companyId) {
       throw new BadRequestException(
-        `"${itemName}": unknown batch "${batchNo}" — batches are created when you purchase stock`,
+        `"${itemName}": unknown batch "${batchNo}"`,
       );
     }
     if (batch.expiryDate && batch.expiryDate.getTime() < saleDate.getTime()) {
@@ -191,5 +182,120 @@ export class BatchesService {
         expired: b.expiryDate!.getTime() < now,
       }))
       .filter((b) => b.qty > 0);
+  }
+
+  /**
+   * Stock on hand per item: opening − sold + sales returns (ACTIVE documents only).
+   * Valuation uses the item's purchase price.
+   */
+  async stockReport(companyId: string) {
+    const [items, sold, noteMoves] = await Promise.all([
+      this.prisma.item.findMany({
+        where: { companyId, isActive: true },
+        orderBy: { name: 'asc' },
+      }),
+      this.prisma.invoiceLine.groupBy({
+        by: ['itemId'],
+        where: {
+          itemId: { not: null },
+          invoice: { companyId, status: InvoiceStatus.ISSUED },
+        },
+        _sum: { quantity: true },
+      }),
+      this.prisma.noteLine.groupBy({
+        by: ['itemId'],
+        where: {
+          itemId: { not: null },
+          note: { companyId, status: InvoiceStatus.ISSUED, type: NoteType.CREDIT_NOTE },
+        },
+        _sum: { quantity: true },
+      }).then(async (creditIn) => ({
+        creditIn,
+        debitOut: await this.prisma.noteLine.groupBy({
+          by: ['itemId'],
+          where: {
+            itemId: { not: null },
+            note: { companyId, status: InvoiceStatus.ISSUED, type: NoteType.DEBIT_NOTE },
+          },
+          _sum: { quantity: true },
+        }),
+      })),
+    ]);
+
+    const creditInMap = new Map(
+      noteMoves.creditIn.map((row) => [row.itemId as string, Number(row._sum.quantity ?? 0)]),
+    );
+    const debitOutMap = new Map(
+      noteMoves.debitOut.map((row) => [row.itemId as string, Number(row._sum.quantity ?? 0)]),
+    );
+    const outByItem = new Map(
+      sold.map((row) => [row.itemId as string, Number(row._sum.quantity ?? 0)]),
+    );
+
+    // Per-batch breakdown for items that track batches.
+    const trackedIds = items.filter((i) => i.trackBatches).map((i) => i.id);
+    const batchesByItem = new Map<
+      string,
+      { batchNo: string; expiryDate: Date | null; qty: number; expired: boolean; expiringSoon: boolean }[]
+    >();
+    if (trackedIds.length > 0) {
+      const allBatches = await this.prisma.itemBatch.findMany({
+        where: { companyId, itemId: { in: trackedIds } },
+        orderBy: [{ expiryDate: 'asc' }, { createdAt: 'asc' }],
+      });
+      const qtyByBatch = await this.availability(companyId, {
+        batchIds: allBatches.map((b) => b.id),
+      });
+      const now = Date.now();
+      for (const b of allBatches) {
+        const arr = batchesByItem.get(b.itemId) ?? [];
+        arr.push({
+          batchNo: b.batchNo,
+          expiryDate: b.expiryDate,
+          qty: qtyByBatch.get(b.id) ?? 0,
+          expired: b.expiryDate !== null && b.expiryDate.getTime() < now,
+          expiringSoon:
+            b.expiryDate !== null &&
+            b.expiryDate.getTime() >= now &&
+            b.expiryDate.getTime() <= now + 30 * DAY,
+        });
+        batchesByItem.set(b.itemId, arr);
+      }
+    }
+
+    return items.map((item) => {
+      const purchasedQty = 0;
+      const creditInQty = creditInMap.get(item.id) ?? 0;
+      const debitOutQty = debitOutMap.get(item.id) ?? 0;
+      const soldQty = outByItem.get(item.id) ?? 0;
+      const opening = Number(item.openingStock);
+      const totalIn = opening + creditInQty;
+      const totalOut = soldQty + debitOutQty;
+      const onHand = q3(totalIn - totalOut);
+      const avgRate = item.purchasePrice !== null ? Number(item.purchasePrice) : 0;
+      const stockValue = r2(onHand * avgRate);
+      const isLowStock =
+        item.reorderLevel !== null && onHand <= Number(item.reorderLevel);
+
+      return {
+        itemId: item.id,
+        name: item.name,
+        sku: item.sku,
+        hsnCode: item.hsnCode,
+        unit: item.unit,
+        trackBatches: item.trackBatches,
+        openingStock: opening,
+        purchasedQty: 0,
+        soldQty: q3(soldQty),
+        creditInQty: q3(creditInQty),
+        debitOutQty: q3(debitOutQty),
+        onHand,
+        avgRate,
+        stockValue,
+        reorderLevel: item.reorderLevel !== null ? Number(item.reorderLevel) : null,
+        isLowStock,
+        batches: batchesByItem.get(item.id) ?? [],
+      };
+    });
   }
 }

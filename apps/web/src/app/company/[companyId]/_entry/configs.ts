@@ -28,34 +28,6 @@ export const PROFORMA_ENTRY: DocEntryConfig = {
   extraCharges: true,
 };
 
-export const PURCHASE_ESTIMATE_ENTRY: DocEntryConfig = {
-  kind: 'purchaseEstimate',
-  apiBase: 'purchase-estimates',
-  tab: 'purchase-estimates',
-  party: 'vendor',
-  noTax: true,
-  extraCharges: true,
-};
-
-export const PURCHASE_ORDER_ENTRY: DocEntryConfig = {
-  kind: 'purchaseOrder',
-  apiBase: 'purchase-orders',
-  tab: 'purchase-orders',
-  party: 'vendor',
-  secondDate: 'expectedDate',
-  noTax: true,
-};
-
-export const PURCHASE_BILL_ENTRY: DocEntryConfig = {
-  kind: 'purchaseBill',
-  apiBase: 'purchase-bills',
-  tab: 'purchases',
-  party: 'vendor',
-  supplierBillNo: true,
-  purchaseBatch: true,
-  extraCharges: true,
-  aiScanDraft: true,
-};
 
 export const SALES_ORDER_ENTRY: DocEntryConfig = {
   kind: 'salesOrder',

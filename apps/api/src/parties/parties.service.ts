@@ -64,10 +64,7 @@ export class PartiesService {
   /** Validates a per-party document type against the party's kind (or clears it). */
   private validDocType(type: PartyType, v?: string | null): string | null {
     if (!v) return null;
-    const allowed =
-      type === PartyType.CUSTOMER
-        ? ['invoice', 'estimate']
-        : ['purchase', 'purchaseEstimate'];
+    const allowed = type === PartyType.CUSTOMER ? ['invoice', 'estimate'] : [];
     if (!allowed.includes(v)) {
       throw new BadRequestException(
         `Document type "${v}" is not valid for a ${type.toLowerCase()}`,

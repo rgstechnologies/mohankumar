@@ -3,7 +3,7 @@ import { EstimateStatus, InvoiceStatus, PartyType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** The document types a party's outstanding can be tracked against. */
-export type BalanceDocType = 'invoice' | 'estimate' | 'purchase';
+export type BalanceDocType = 'invoice' | 'estimate';
 
 export interface CompanyDefaults {
   salesPaymentLink: string; // 'invoice' | 'estimate'
@@ -31,7 +31,7 @@ export interface PartyOutstanding {
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 // Estimate-like documents that still represent a live obligation. CONVERTED is
-// excluded: once an estimate becomes an invoice/bill, the receivable lives on
+// excluded: once an estimate becomes an invoice, the receivable lives on
 // that invoice — counting the estimate too would overstate the balance forever.
 const EST_ACTIVE = {
   notIn: [
@@ -47,10 +47,7 @@ const EST_ACTIVE = {
  * Every customer/vendor is tracked against exactly ONE document type — set per
  * party (`balanceDocType`) or inherited from the company default. The amount
  * owed is always `Σ(document total − payments linked to that document)` for that
- * one type, never mixing estimates with invoices (or purchase-estimates with
- * bills). This single service is the source of truth used by the party list,
- * profile, dashboards, reports, payment screens and search popups so the
- * separation holds identically everywhere.
+ * one type.
  */
 @Injectable()
 export class PartyBalanceService {
@@ -60,16 +57,11 @@ export class PartyBalanceService {
   resolveDocType(party: PartyLite, company: CompanyDefaults): BalanceDocType {
     if (
       party.balanceDocType === 'invoice' ||
-      party.balanceDocType === 'estimate' ||
-      party.balanceDocType === 'purchase'
+      party.balanceDocType === 'estimate'
     ) {
       return party.balanceDocType;
     }
-    if (party.type === PartyType.CUSTOMER) {
-      return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
-    }
-    // Vendors are always tracked against purchase bills.
-    return 'purchase';
+    return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
   }
 
   /**
@@ -85,7 +77,6 @@ export class PartyBalanceService {
     const buckets: Record<BalanceDocType, string[]> = {
       invoice: [],
       estimate: [],
-      purchase: [],
     };
     for (const p of parties) {
       const dt = this.resolveDocType(p, company);
@@ -100,7 +91,6 @@ export class PartyBalanceService {
     await Promise.all([
       this.sumInvoices(companyId, buckets.invoice, add),
       this.sumEstimates(companyId, buckets.estimate, add),
-      this.sumPurchaseBills(companyId, buckets.purchase, add),
     ]);
 
     const result = new Map<string, PartyOutstanding>();
@@ -127,9 +117,7 @@ export class PartyBalanceService {
 
   /**
    * A document-based statement for the party: every document of its tracked
-   * type (paid + unpaid), oldest first, with paid/outstanding per document and
-   * the running total still due. Respects the strict doc-type separation, so a
-   * customer tracked by estimates never sees invoices here (and vice-versa).
+   * type (paid + unpaid), oldest first.
    */
   async statement(
     companyId: string,
@@ -180,34 +168,15 @@ export class PartyBalanceService {
         })
         .filter(keep);
     }
-    if (docType === 'estimate') {
-      const rows = await this.prisma.estimate.findMany({
-        where: { companyId, partyId, status: EST_ACTIVE },
-        select: {
-          id: true, estimateNo: true, fiscalYear: true, date: true, total: true,
-          payments: { select: { amount: true } },
-        },
-        orderBy: { date: 'asc' },
-      });
-      return rows
-        .map((r) => {
-          const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
-          return {
-            id: r.id,
-            no: `AGE/${r.fiscalYear}/${String(r.estimateNo).padStart(4, '0')}`,
-            date: r.date,
-            total: Number(r.total),
-            paid: r2(paid),
-            outstanding: r2(Number(r.total) - paid),
-          };
-        })
-        .filter(keep);
-    }
-    // purchase
-    const rows = await this.prisma.purchaseBill.findMany({
-      where: { companyId, partyId, status: InvoiceStatus.ISSUED },
+    // estimate
+    const rows = await this.prisma.estimate.findMany({
+      where: { companyId, partyId, status: EST_ACTIVE },
       select: {
-        id: true, billNo: true, fiscalYear: true, date: true, total: true,
+        id: true,
+        estimateNo: true,
+        fiscalYear: true,
+        date: true,
+        total: true,
         payments: { select: { amount: true } },
       },
       orderBy: { date: 'asc' },
@@ -217,7 +186,7 @@ export class PartyBalanceService {
         const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
         return {
           id: r.id,
-          no: `BILL/${r.fiscalYear}/${String(r.billNo).padStart(4, '0')}`,
+          no: `AGE/${r.fiscalYear}/${String(r.estimateNo).padStart(4, '0')}`,
           date: r.date,
           total: Number(r.total),
           paid: r2(paid),
@@ -266,21 +235,4 @@ export class PartyBalanceService {
       add(r.partyId, Number(r.total) - paid);
     }
   }
-
-  private async sumPurchaseBills(
-    companyId: string,
-    partyIds: string[],
-    add: (partyId: string, amount: number) => void,
-  ) {
-    if (!partyIds.length) return;
-    const rows = await this.prisma.purchaseBill.findMany({
-      where: { companyId, partyId: { in: partyIds }, status: InvoiceStatus.ISSUED },
-      select: { partyId: true, total: true, payments: { select: { amount: true } } },
-    });
-    for (const r of rows) {
-      const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
-      add(r.partyId, Number(r.total) - paid);
-    }
-  }
-
 }

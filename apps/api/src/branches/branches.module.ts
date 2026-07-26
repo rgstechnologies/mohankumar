@@ -133,9 +133,9 @@ class BranchesController {
   }
 
   @Get('performance')
-  @ApiOperation({ summary: 'Branch-wise sales / purchases / outstanding (current FY)' })
+  @ApiOperation({ summary: 'Branch-wise sales / outstanding (current FY)' })
   async performance(@Param('companyId', ParseUUIDPipe) companyId: string) {
-    const [branches, invoices, bills] = await Promise.all([
+    const [branches, invoices] = await Promise.all([
       this.prisma.branch.findMany({ where: { companyId } }),
       this.prisma.invoice.findMany({
         where: { companyId, status: InvoiceStatus.ISSUED },
@@ -144,20 +144,7 @@ class BranchesController {
           creditNotes: { where: { status: 'ISSUED' }, select: { total: true } },
         },
       }),
-      this.prisma.purchaseBill.groupBy({
-        by: ['branchId'],
-        where: { companyId, status: InvoiceStatus.ISSUED },
-        _sum: { total: true },
-        _count: true,
-      }),
     ]);
-
-    const billByBranch = new Map(
-      bills.map((b) => [
-        b.branchId ?? 'unassigned',
-        { purchases: Number(b._sum.total ?? 0), billCount: b._count },
-      ]),
-    );
 
     const rows = new Map<
       string,
@@ -180,8 +167,8 @@ class BranchesController {
           sales: 0,
           invoiceCount: 0,
           outstanding: 0,
-          purchases: billByBranch.get(key)?.purchases ?? 0,
-          billCount: billByBranch.get(key)?.billCount ?? 0,
+          purchases: 0,
+          billCount: 0,
         });
       }
       return rows.get(key)!;
@@ -208,13 +195,12 @@ class BranchesController {
         ...row,
         sales: Math.round(row.sales * 100) / 100,
         outstanding: Math.round(row.outstanding * 100) / 100,
-        purchases: Math.round(row.purchases * 100) / 100,
+        purchases: 0,
       }))
       .filter(
         (row) =>
           row.branchId !== null ||
           row.sales > 0 ||
-          row.purchases > 0 ||
           row.invoiceCount > 0,
       )
       .sort((a, b) => b.sales - a.sales);
