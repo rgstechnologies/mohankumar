@@ -1,3 +1,4 @@
+import { DOCUMENT_PREFIX, formatDocumentNo } from '@bookly/shared';
 import { Injectable } from '@nestjs/common';
 import {
   AccountNature,
@@ -124,11 +125,14 @@ export class ReportsService {
   // Trial Balance
   // -------------------------------------------------------------
 
-  async trialBalance(companyId: string, asOf?: string) {
+  async trialBalance(companyId: string, asOf?: string, from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : asOf ? new Date(asOf) : undefined;
     const [nets, openingDiff] = await Promise.all([
       this.ledgerNets(companyId, {
-        to: asOf ? new Date(asOf) : undefined,
-        includeOpening: true,
+        from: fromDate,
+        to: toDate,
+        includeOpening: !fromDate,
       }),
       this.openingDifference(companyId),
     ]);
@@ -151,7 +155,9 @@ export class ReportsService {
       });
     }
     return {
-      asOf: asOf ?? new Date().toISOString().slice(0, 10),
+      asOf: asOf ?? to ?? new Date().toISOString().slice(0, 10),
+      from: from ?? null,
+      to: to ?? null,
       rows,
       totalDebit: r2(rows.reduce((s, row) => s + row.debit, 0)),
       totalCredit: r2(rows.reduce((s, row) => s + row.credit, 0)),
@@ -196,10 +202,13 @@ export class ReportsService {
   // Balance Sheet (as of date, all history)
   // -------------------------------------------------------------
 
-  async balanceSheet(companyId: string, asOf?: string) {
+  async balanceSheet(companyId: string, asOf?: string, from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : asOf ? new Date(asOf) : undefined;
     const [nets, openingDiff] = await Promise.all([
       this.ledgerNets(companyId, {
-        to: asOf ? new Date(asOf) : undefined,
+        from: fromDate,
+        to: toDate,
         includeOpening: true,
       }),
       this.openingDifference(companyId),
@@ -212,8 +221,6 @@ export class ReportsService {
       .filter((n) => n.nature === AccountNature.LIABILITY && n.net !== 0)
       .map((n) => ({ ledger: n.name, group: n.groupName, amount: r2(-n.net) }));
 
-    // Accumulated P&L (income − expenses over all history incl. openings)
-    // sits on the liabilities side, keeping the sheet balanced.
     const plNet = r2(
       nets
         .filter(
@@ -224,7 +231,6 @@ export class ReportsService {
         .reduce((s, n) => s - n.net, 0),
     );
 
-    // Contra-less opening balances land here, exactly as Tally shows them.
     if (openingDiff !== 0) {
       liabilities.push({
         ledger: 'Difference in Opening Balances',
@@ -238,7 +244,9 @@ export class ReportsService {
       liabilities.reduce((s, x) => s + x.amount, 0) + plNet,
     );
     return {
-      asOf: asOf ?? new Date().toISOString().slice(0, 10),
+      asOf: asOf ?? to ?? new Date().toISOString().slice(0, 10),
+      from: from ?? null,
+      to: to ?? null,
       assets,
       liabilities,
       profitAndLoss: plNet,
@@ -271,7 +279,7 @@ export class ReportsService {
     const b2b = invoices
       .filter((inv) => inv.party.gstin)
       .map((inv) => ({
-        invoiceNo: `AGI/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: formatDocumentNo(DOCUMENT_PREFIX.INVOICE, inv.fiscalYear, inv.invoiceNo),
         date: inv.date,
         gstin: inv.party.gstin,
         party: inv.party.name,
@@ -328,7 +336,7 @@ export class ReportsService {
       to: toDate.toISOString().slice(0, 10),
       b2b,
       creditNotes: creditNotes.map((n) => ({
-        noteNo: `CRN/${n.fiscalYear}/${String(n.noteNo).padStart(4, '0')}`,
+        noteNo: formatDocumentNo(DOCUMENT_PREFIX.CREDIT_NOTE, n.fiscalYear, n.noteNo),
         date: n.date,
         gstin: n.party.gstin,
         party: n.party.name,
@@ -426,30 +434,21 @@ export class ReportsService {
   // Dashboard
   // -------------------------------------------------------------
 
-  /** Sales vs purchases per month for the last `months` months (for charts). */
+  /** Sales per month for the last `months` months (for charts). */
   private async monthlySeries(companyId: string, months = 6) {
     const start = new Date();
     start.setUTCDate(1);
     start.setUTCHours(0, 0, 0, 0);
     start.setUTCMonth(start.getUTCMonth() - (months - 1));
 
-    const [sales, purchases] = await Promise.all([
-      this.prisma.$queryRaw<{ month: string; total: number }[]>`
+    const sales = await this.prisma.$queryRaw<{ month: string; total: number }[]>`
         SELECT to_char(date_trunc('month', "date"), 'YYYY-MM') AS month,
                COALESCE(SUM("total"), 0)::float AS total
         FROM "invoices"
         WHERE "companyId" = ${companyId} AND "status" = 'ISSUED' AND "date" >= ${start}
-        GROUP BY 1`,
-      this.prisma.$queryRaw<{ month: string; total: number }[]>`
-        SELECT to_char(date_trunc('month', "date"), 'YYYY-MM') AS month,
-               COALESCE(SUM("total"), 0)::float AS total
-        FROM "purchase_bills"
-        WHERE "companyId" = ${companyId} AND "status" = 'ISSUED' AND "date" >= ${start}
-        GROUP BY 1`,
-    ]);
+        GROUP BY 1`;
 
     const salesByMonth = new Map(sales.map((r) => [r.month, r.total]));
-    const purchasesByMonth = new Map(purchases.map((r) => [r.month, r.total]));
 
     const series: { month: string; label: string; sales: number; purchases: number }[] = [];
     const cursor = new Date(start);
@@ -459,7 +458,7 @@ export class ReportsService {
         month: key,
         label: cursor.toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' }),
         sales: r2(salesByMonth.get(key) ?? 0),
-        purchases: r2(purchasesByMonth.get(key) ?? 0),
+        purchases: 0,
       });
       cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     }
@@ -480,7 +479,7 @@ export class ReportsService {
 
     // The Overview reflects the selected Payment Link: when sales payments
     // reconcile against estimates, the sales figures are derived from estimates
-    // rather than invoices. Purchases always come from purchase bills.
+    // rather than invoices.
     const salesViaEstimate = company.salesPaymentLink === 'estimate';
     const estActive = { notIn: [EstimateStatus.CANCELLED, EstimateStatus.DECLINED] };
 
@@ -497,15 +496,10 @@ export class ReportsService {
             _count: true,
           });
 
-    const [salesMTD, salesFY, purchasesMTD, nets, items, soldQty, boughtQty] =
+    const [salesMTD, salesFY, nets, items, soldQty] =
       await Promise.all([
         aggSales(monthStart),
         aggSales(fyStartDate),
-        this.prisma.purchaseBill.aggregate({
-          where: { companyId, status: InvoiceStatus.ISSUED, date: { gte: monthStart } },
-          _sum: { total: true },
-          _count: true,
-        }),
         this.ledgerNets(companyId, { includeOpening: true }),
         this.prisma.item.findMany({
           where: { companyId, isActive: true, reorderLevel: { not: null } },
@@ -513,11 +507,6 @@ export class ReportsService {
         this.prisma.invoiceLine.groupBy({
           by: ['itemId'],
           where: { itemId: { not: null }, invoice: { companyId, status: InvoiceStatus.ISSUED } },
-          _sum: { quantity: true },
-        }),
-        this.prisma.purchaseBillLine.groupBy({
-          by: ['itemId'],
-          where: { itemId: { not: null }, bill: { companyId, status: InvoiceStatus.ISSUED } },
           _sum: { quantity: true },
         }),
       ]);
@@ -569,7 +558,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((e) => ({
         id: e.id,
-        invoiceNo: `AGE/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
+        invoiceNo: formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, e.fiscalYear, e.estimateNo),
         date: e.date,
         party: e.party.name,
         total: Number(e.total),
@@ -584,7 +573,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((inv) => ({
         id: inv.id,
-        invoiceNo: `AGI/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: formatDocumentNo(DOCUMENT_PREFIX.INVOICE, inv.fiscalYear, inv.invoiceNo),
         date: inv.date,
         party: inv.party.name,
         total: Number(inv.total),
@@ -595,13 +584,9 @@ export class ReportsService {
     const soldMap = new Map(
       soldQty.map((row) => [row.itemId as string, Number(row._sum.quantity ?? 0)]),
     );
-    const boughtMap = new Map(
-      boughtQty.map((row) => [row.itemId as string, Number(row._sum.quantity ?? 0)]),
-    );
     const lowStockCount = items.filter((item) => {
       const onHand =
-        Number(item.openingStock) +
-        (boughtMap.get(item.id) ?? 0) -
+        Number(item.openingStock) -
         (soldMap.get(item.id) ?? 0);
       return onHand <= Number(item.reorderLevel);
     }).length;
@@ -615,7 +600,7 @@ export class ReportsService {
       invoicesThisMonth: salesMTD._count,
       salesThisFY: Number(salesFY._sum.total ?? 0),
       invoicesThisFY: salesFY._count,
-      purchasesThisMonth: Number(purchasesMTD._sum.total ?? 0),
+      purchasesThisMonth: 0,
       cashBank,
       receivables,
       payables,

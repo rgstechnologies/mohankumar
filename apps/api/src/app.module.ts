@@ -19,7 +19,6 @@ import { MailModule } from './mail/mail.module';
 import { NotesModule } from './notes/notes.module';
 import { PartiesModule } from './parties/parties.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { PurchasesModule } from './purchases/purchases.module';
 import { RedisModule } from './redis/redis.module';
 import { ReportsModule } from './reports/reports.module';
 
@@ -54,9 +53,8 @@ import { ReportsModule } from './reports/reports.module';
     BalancesModule,
     EstimatesModule,
     InvoicesModule,
-    PurchasesModule,
     // Credit/debit notes: required by GSTR-1 (CDNR/CDNUR sections) and by the
-    // invoice/bill outstanding and stock-return maths.
+    // invoice outstanding and stock-return maths.
     NotesModule,
     ReportsModule,
     ExportsModule,

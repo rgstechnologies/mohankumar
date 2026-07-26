@@ -147,9 +147,6 @@ export const DOC_KINDS = [
   'proformaInvoice',
   'salesOrder',
   'deliveryChallan',
-  'purchaseEstimate',
-  'purchaseBill',
-  'purchaseOrder',
   'payslip',
 ] as const;
 export type DocKind = (typeof DOC_KINDS)[number];

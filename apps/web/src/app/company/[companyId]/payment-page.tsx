@@ -12,7 +12,6 @@ import {
   fetchEstimates,
   fetchInvoices,
   fetchPartyPayments,
-  fetchPurchaseBills,
   inr,
   type BankAccountRow,
   type LedgerRow,
@@ -45,10 +44,10 @@ interface HistoryDoc {
 }
 
 /**
- * Payment In (sales, mode='in') / Payment Out (purchase, mode='out'): pick a
- * party (or add one), see their open invoices/bills + transaction history on
- * the right, and allocate a receipt/payment across specific documents — plus
- * any leftover recorded on-account. Reuses the per-document payment endpoints.
+ * Payment In (sales, mode='in'): pick a party (or add one), see their open
+ * invoices/estimates + transaction history on the right, and allocate a receipt
+ * across specific documents — plus any leftover recorded on-account. Reuses the
+ * per-document payment endpoints.
  *
  * `docKind` splits Payment-In into the two banking screens the business asked
  * for: "Estimate Banking" settles estimates, "Invoice Banking" settles GST
@@ -58,7 +57,7 @@ interface HistoryDoc {
  */
 export function PaymentPage({
   companyId,
-  mode,
+  mode = 'in',
   docKind,
   parties,
   ledgers,
@@ -66,7 +65,7 @@ export function PaymentPage({
   onChanged,
 }: {
   companyId: string;
-  mode: 'in' | 'out';
+  mode?: 'in' | 'out';
   /** Payment-In only: show customers tracked by estimates, or by invoices. */
   docKind?: 'estimate' | 'invoice';
   parties: PartyRow[];
@@ -136,8 +135,7 @@ export function PaymentPage({
 
   const selectedParty = people.find((p) => p.id === partyId) ?? null;
   // Payment-In: the screen itself fixes the document (Estimate Banking vs
-  // Invoice Banking) and only lists customers tracked that way. Payment-Out
-  // always settles purchase bills.
+  // Invoice Banking) and only lists customers tracked that way.
   const useEstimate = isIn && docKind === 'estimate';
 
   const loadParty = useCallback(
@@ -195,7 +193,7 @@ export function PaymentPage({
           const totalDebit = rows.reduce((s, r) => s + r.total, 0);
           const totalCredit = screenPays.reduce((s, p) => s + p.amount, 0);
           setScreenBalance(Math.round((totalDebit - totalCredit) * 100) / 100);
-        } else if (isIn) {
+        } else {
           const invs = (await fetchInvoices(companyId))
             .filter((i) => i.party.id === pid && i.status !== 'CANCELLED');
           setOpenDocs(
@@ -211,31 +209,13 @@ export function PaymentPage({
           const totalOutstanding = invs.reduce((s, i) => s + i.outstanding, 0);
           const unlinkedPaid = screenPays.reduce((s, p) => s + p.amount, 0);
           setScreenBalance(Math.round((totalOutstanding - unlinkedPaid) * 100) / 100);
-        } else {
-          const bills = (await fetchPurchaseBills(companyId))
-            .filter((b) => b.party.id === pid && b.status !== 'CANCELLED');
-          setOpenDocs(
-            bills
-              .filter((b) => b.outstanding > 0)
-              .map((b) => ({ id: b.id, no: b.billNo, date: b.date, total: b.total, outstanding: b.outstanding, kind: 'bill' as const })),
-          );
-          const histRows = bills
-            .map((b) => ({ no: b.billNo, date: b.date, total: b.total, paid: b.total - b.outstanding, outstanding: b.outstanding, isBill: true }))
-            .sort((a, b) => b.date.localeCompare(a.date));
-          setHistory(histRows);
-          // Balance = Σ bill outstanding (already net of linked payments) − unlinked advances.
-          const totalOutstanding = bills.reduce((s, b) => s + b.outstanding, 0);
-          const unlinkedPaid = screenPays.reduce((s, p) => s + p.amount, 0);
-          setScreenBalance(Math.round((totalOutstanding - unlinkedPaid) * 100) / 100);
+        }
         }
       } finally {
         setLoadingParty(false);
       }
     },
-    // `useEstimate` decides which document this screen settles — leaving it out
-    // would let the callback close over a stale value and load invoices on the
-    // estimate screen (or vice-versa).
-    [companyId, isIn, useEstimate],
+    [companyId, useEstimate],
   );
 
   useEffect(() => {

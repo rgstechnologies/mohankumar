@@ -11,14 +11,12 @@ import {
   fetchItems,
   fetchLedgers,
   fetchParties,
-  fetchPurchaseBills,
   fetchStock,
   type InvoiceView,
   type EstimateView,
   type ItemRow,
   type LedgerRow,
   type PartyRow,
-  type PurchaseBillView,
   type StockRow,
 } from '@/lib/accounting';
 import { api, isAuthenticated, logout, type Me } from '@/lib/api';
@@ -32,7 +30,6 @@ import { PaymentPage } from './payment-page';
 import { ItemsTab } from './items-tab';
 import { OverviewTab } from './overview-tab';
 import { PartiesTab } from './parties-tab';
-import { PurchasesTab } from './purchases-tab';
 import { ReportsTab } from './reports-tab';
 import { StockTab } from './stock-tab';
 
@@ -42,8 +39,6 @@ type Tab =
   | 'invoices'
   | 'estimate-payments'
   | 'invoice-payments'
-  | 'purchases'
-  | 'payment-out'
   | 'stock'
   | 'items'
   | 'parties'
@@ -59,12 +54,6 @@ function NavIcon({ name }: { name: Tab }) {
     ),
     'invoice-payments': (
       <path d="M3 9l9-6 9 6M4 9v11M20 9v11M2 20h20M8 13v4M12 13v4M16 13v4" />
-    ),
-    purchases: (
-      <path d="M3 3h2l2.2 12.4a1 1 0 001 .6h9.8a1 1 0 001-.8L21 7H6M9 20a1 1 0 100-2 1 1 0 000 2zM18 20a1 1 0 100-2 1 1 0 000 2z" />
-    ),
-    'payment-out': (
-      <path d="M12 1v22M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" />
     ),
     stock: <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5" />,
     items: (
@@ -225,7 +214,6 @@ export default function CompanyPage() {
   const [items, setItems] = useState<ItemRow[]>([]);
   const [invoices, setInvoices] = useState<InvoiceView[]>([]);
   const [estimates, setEstimates] = useState<EstimateView[]>([]);
-  const [bills, setBills] = useState<PurchaseBillView[]>([]);
   const [stock, setStock] = useState<StockRow[]>([]);
 
   // Open a specific tab when arriving with ?tab=… (e.g. returning from a
@@ -237,13 +225,12 @@ export default function CompanyPage() {
   }, []);
 
   const reload = useCallback(async () => {
-    const [l, p, i, inv, est, pb, st] = await Promise.all([
+    const [l, p, i, inv, est, st] = await Promise.all([
       fetchLedgers(companyId),
       fetchParties(companyId),
       fetchItems(companyId),
       fetchInvoices(companyId),
       fetchEstimates(companyId),
-      fetchPurchaseBills(companyId),
       fetchStock(companyId),
     ]);
     setLedgers(l);
@@ -251,7 +238,6 @@ export default function CompanyPage() {
     setItems(i);
     setInvoices(inv);
     setEstimates(est);
-    setBills(pb);
     setStock(st);
   }, [companyId]);
 
@@ -473,27 +459,6 @@ export default function CompanyPage() {
               companyId={companyId}
               mode="in"
               docKind="invoice"
-              parties={parties}
-              ledgers={ledgers}
-              canManage={canPostVouchers}
-              onChanged={reload}
-            />
-          )}
-
-          {tab === 'purchases' && (
-            <PurchasesTab
-              companyId={companyId}
-              ledgers={ledgers}
-              bills={bills}
-              canBill={canPostVouchers}
-              canCancel={canManageLedgers}
-              onChanged={reload}
-            />
-          )}
-          {tab === 'payment-out' && (
-            <PaymentPage
-              companyId={companyId}
-              mode="out"
               parties={parties}
               ledgers={ledgers}
               canManage={canPostVouchers}

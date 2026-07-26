@@ -9,7 +9,6 @@ import {
   inr,
   type InvoiceView,
   type ItemRow,
-  type PurchaseBillView,
 } from '@/lib/accounting';
 import { api, ApiError } from '@/lib/api';
 
@@ -37,7 +36,6 @@ interface DraftLine {
 export function NotesTab({
   companyId,
   invoices,
-  bills,
   items,
   notes,
   canManage,
@@ -45,7 +43,6 @@ export function NotesTab({
 }: {
   companyId: string;
   invoices: InvoiceView[];
-  bills: PurchaseBillView[];
   items: ItemRow[];
   notes: NoteView[];
   canManage: boolean;
@@ -72,14 +69,10 @@ export function NotesTab({
 
   const sources = useMemo(
     () =>
-      type === 'CREDIT_NOTE'
-        ? invoices
-            .filter((i) => i.status === 'ISSUED')
-            .map((i) => ({ id: i.id, label: `${i.invoiceNo} · ${i.party.name} · ₹${inr(i.total)}` }))
-        : bills
-            .filter((b) => b.status === 'ISSUED')
-            .map((b) => ({ id: b.id, label: `${b.billNo} · ${b.party.name} · ₹${inr(b.total)}` })),
-    [type, invoices, bills],
+      invoices
+        .filter((i) => i.status === 'ISSUED')
+        .map((i) => ({ id: i.id, label: `${i.invoiceNo} · ${i.party.name} · ₹${inr(i.total)}` })),
+    [invoices],
   );
 
   function updateLine(index: number, patch: Partial<DraftLine>) {

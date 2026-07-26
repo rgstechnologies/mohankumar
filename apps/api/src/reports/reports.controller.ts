@@ -24,13 +24,17 @@ export class ReportsController {
   }
 
   @Get('reports/trial-balance')
-  @ApiOperation({ summary: 'Trial Balance (as of date)' })
+  @ApiOperation({ summary: 'Trial Balance (as of date or date range)' })
   @ApiQuery({ name: 'asOf', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
   trialBalance(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Query('asOf') asOf?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.reports.trialBalance(companyId, asOf);
+    return this.reports.trialBalance(companyId, asOf, from, to);
   }
 
   @Get('reports/profit-loss')
@@ -46,13 +50,17 @@ export class ReportsController {
   }
 
   @Get('reports/balance-sheet')
-  @ApiOperation({ summary: 'Balance Sheet (as of date)' })
+  @ApiOperation({ summary: 'Balance Sheet (as of date or date range)' })
   @ApiQuery({ name: 'asOf', required: false })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
   balanceSheet(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Query('asOf') asOf?: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
   ) {
-    return this.reports.balanceSheet(companyId, asOf);
+    return this.reports.balanceSheet(companyId, asOf, from, to);
   }
 
   @Get('reports/gstr1')
