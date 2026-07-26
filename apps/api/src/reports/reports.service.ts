@@ -4,6 +4,7 @@ import {
   EntryType,
   EstimateStatus,
   InvoiceStatus,
+  PartyPaymentDirection,
   PartyType,
   VoucherStatus,
 } from '@prisma/client';
@@ -270,7 +271,7 @@ export class ReportsService {
     const b2b = invoices
       .filter((inv) => inv.party.gstin)
       .map((inv) => ({
-        invoiceNo: `INV/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: `AGI/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
         date: inv.date,
         gstin: inv.party.gstin,
         party: inv.party.name,
@@ -549,7 +550,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((e) => ({
         id: e.id,
-        invoiceNo: `EST/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
+        invoiceNo: `AGE/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
         date: e.date,
         party: e.party.name,
         total: Number(e.total),
@@ -564,7 +565,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((inv) => ({
         id: inv.id,
-        invoiceNo: `INV/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: `AGI/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
         date: inv.date,
         party: inv.party.name,
         total: Number(inv.total),
@@ -598,6 +599,203 @@ export class ReportsService {
       outstandingInvoiceAmount: outstanding,
       lowStockCount,
       recentInvoices: recentDocs,
+    };
+  }
+
+  async estimateReport(companyId: string) {
+    const [company, parties, estimates, partyPayments] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { salesPaymentLink: true },
+      }),
+      this.prisma.party.findMany({
+        where: { companyId, type: PartyType.CUSTOMER },
+        select: { id: true, type: true, balanceDocType: true },
+      }),
+      this.prisma.estimate.findMany({
+        where: { companyId, status: { not: EstimateStatus.CANCELLED } },
+        include: { party: { select: { name: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.partyPayment.findMany({
+        where: { companyId, direction: PartyPaymentDirection.RECEIPT },
+        include: {
+          estimate: { select: { estimateNo: true } },
+          party: { select: { name: true } },
+        },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
+
+    const resolvedDocTypeOf = (partyId: string) => {
+      const p = parties.find((x) => x.id === partyId);
+      if (!p) return 'invoice';
+      return this.balances.resolveDocType(p, company);
+    };
+
+    const rows: {
+      id: string;
+      date: string;
+      description: string;
+      debit: number;
+      credit: number;
+    }[] = [];
+
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    for (const est of estimates) {
+      const amount = Number(est.total);
+      totalDebit += amount;
+      rows.push({
+        id: `est-${est.id}`,
+        date: est.date.toISOString().slice(0, 10),
+        description: `Estimate #${est.estimateNo} (${est.party.name})`,
+        debit: amount,
+        credit: 0,
+      });
+    }
+
+    for (const p of partyPayments) {
+      // A partyPayment belongs to the estimate report when:
+      //   1. It is explicitly linked to an estimate (estimateId set), OR
+      //   2. Its `source` is 'estimate' (unlinked advance from the Estimate Banking screen), OR
+      //   3. Legacy record without source: fall back to the party's resolved doc type.
+      const isEst =
+        !!p.estimateId ||
+        p.source === 'estimate' ||
+        (p.source === null && resolvedDocTypeOf(p.partyId) === 'estimate');
+      if (!isEst) continue;
+
+      const amount = Number(p.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-${p.id}`,
+        date: p.date.toISOString().slice(0, 10),
+        description: p.estimate
+          ? `Payment In (against Estimate #${p.estimate.estimateNo}) - ${p.party.name}`
+          : `Payment In (Advance) - ${p.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      rows,
+      totalDebit: r2(totalDebit),
+      totalCredit: r2(totalCredit),
+      netAmount: r2(totalCredit - totalDebit),
+    };
+  }
+
+  async salesReport(companyId: string) {
+    const [company, parties, invoices, payments, partyPayments] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { salesPaymentLink: true },
+      }),
+      this.prisma.party.findMany({
+        where: { companyId, type: PartyType.CUSTOMER },
+        select: { id: true, type: true, balanceDocType: true },
+      }),
+      this.prisma.invoice.findMany({
+        where: { companyId, status: { not: InvoiceStatus.CANCELLED } },
+        include: { party: { select: { name: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.payment.findMany({
+        where: { companyId, invoice: { status: { not: InvoiceStatus.CANCELLED } } },
+        include: {
+          invoice: {
+            select: {
+              invoiceNo: true,
+              party: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.partyPayment.findMany({
+        where: { companyId, direction: PartyPaymentDirection.RECEIPT },
+        include: {
+          party: { select: { name: true } },
+        },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
+
+    const resolvedDocTypeOf = (partyId: string) => {
+      const p = parties.find((x) => x.id === partyId);
+      if (!p) return 'invoice';
+      return this.balances.resolveDocType(p, company);
+    };
+
+    const rows: {
+      id: string;
+      date: string;
+      description: string;
+      debit: number;
+      credit: number;
+    }[] = [];
+
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    for (const inv of invoices) {
+      const amount = Number(inv.total);
+      totalDebit += amount;
+      rows.push({
+        id: `inv-${inv.id}`,
+        date: inv.date.toISOString().slice(0, 10),
+        description: `Sales Bill #${inv.invoiceNo} (${inv.party.name})`,
+        debit: amount,
+        credit: 0,
+      });
+    }
+
+    for (const p of payments) {
+      const amount = Number(p.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-${p.id}`,
+        date: p.date.toISOString().slice(0, 10),
+        description: `Payment In (against Bill #${p.invoice.invoiceNo}) - ${p.invoice.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    for (const pp of partyPayments) {
+      // A partyPayment belongs to the sales report when:
+      //   1. It has no estimateId (not linked to an estimate), AND
+      //   2. Its `source` is 'invoice' (advance from the Invoice Banking screen), OR
+      //   3. Legacy record without source: fall back to the party's resolved doc type.
+      const isInv =
+        !pp.estimateId &&
+        (pp.source === 'invoice' ||
+          (pp.source === null && resolvedDocTypeOf(pp.partyId) === 'invoice'));
+      if (!isInv) continue;
+
+      const amount = Number(pp.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-adv-${pp.id}`,
+        date: pp.date.toISOString().slice(0, 10),
+        description: `Payment In (Advance) - ${pp.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      rows,
+      totalDebit: r2(totalDebit),
+      totalCredit: r2(totalCredit),
+      netAmount: r2(totalCredit - totalDebit),
     };
   }
 }

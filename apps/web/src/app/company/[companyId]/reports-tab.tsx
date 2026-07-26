@@ -4,17 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ExportButtons } from '@/components/table';
 import { useFeedback } from '@/components/feedback';
-import { Button, Card, HelpTip } from '@/components/ui';
+import { Button, Card, HelpTip, Badge } from '@/components/ui';
 import { inr } from '@/lib/accounting';
 import { api, ApiError, downloadFile } from '@/lib/api';
 
-type Report = 'trial-balance' | 'profit-loss' | 'balance-sheet' | 'gstr1' | 'gstr3b';
+type Report = 'gstr1' | 'estimates' | 'sales';
 
-const REPORTS: Report[] = ['trial-balance', 'profit-loss', 'balance-sheet', 'gstr1', 'gstr3b'];
+const REPORTS: Report[] = ['gstr1', 'estimates', 'sales'];
 
 export function ReportsTab({ companyId }: { companyId: string }) {
   const t = useTranslations('reports');
-  const [report, setReport] = useState<Report>('trial-balance');
+  const [report, setReport] = useState<Report>('gstr1');
   // Data is tagged with the report it belongs to — switching reports renders
   // the loading state until the matching response arrives, and a slow stale
   // response can never be shown under the wrong report.
@@ -54,22 +54,21 @@ export function ReportsTab({ companyId }: { companyId: string }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {report === 'gstr1' && <PortalJsonButton companyId={companyId} />}
-          <ExportButtons companyId={companyId} report={report} />
+          <ExportButtons 
+            companyId={companyId} 
+            report={report === 'estimates' ? 'estimate-report' : report === 'sales' ? 'sales-report' : report} 
+          />
         </div>
       </div>
 
       {!current ? (
         <p className="text-sm text-muted">{t('loadingReport')}</p>
-      ) : report === 'trial-balance' ? (
-        <TrialBalance data={current as never} />
-      ) : report === 'profit-loss' ? (
-        <ProfitLoss data={current as never} />
-      ) : report === 'balance-sheet' ? (
-        <BalanceSheet data={current as never} />
       ) : report === 'gstr1' ? (
         <Gstr1 data={current as never} />
+      ) : report === 'estimates' ? (
+        <CreditDebitReport title={t('picker.estimates')} data={current as never} />
       ) : (
-        <Gstr3b data={current as never} />
+        <CreditDebitReport title={t('picker.sales')} data={current as never} />
       )}
     </div>
   );
@@ -108,169 +107,6 @@ function PortalJsonButton({ companyId }: { companyId: string }) {
       </Button>
       <HelpTip text={t('portalJson.hint')} />
     </span>
-  );
-}
-
-function TrialBalance({
-  data,
-}: {
-  data: {
-    asOf: string;
-    rows: { ledgerId: string; ledger: string; group: string; debit: number; credit: number }[];
-    totalDebit: number;
-    totalCredit: number;
-  };
-}) {
-  const t = useTranslations('reports');
-  const tc = useTranslations('common');
-  return (
-    <Card>
-      <h3 className="mb-3 text-sm font-semibold">{t('trialBalanceAsOf', { date: data.asOf })}</h3>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-line bg-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-            <th className="py-2">{t('ledger')}</th>
-            <th className="py-2">{t('group')}</th>
-            <th className="py-2 text-right">{t('debit')}</th>
-            <th className="py-2 text-right">{t('credit')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.rows.map((row) => (
-            <tr key={row.ledgerId} className="border-b border-line hover:bg-subtle">
-              <td className="py-1.5">{row.ledger}</td>
-              <td className="py-1.5 text-muted">{row.group}</td>
-              <td className="py-1.5 text-right tabular-nums">
-                {row.debit > 0 ? inr(row.debit) : ''}
-              </td>
-              <td className="py-1.5 text-right tabular-nums">
-                {row.credit > 0 ? inr(row.credit) : ''}
-              </td>
-            </tr>
-          ))}
-          <tr className="border-t-2 border-line-strong font-bold">
-            <td className="py-2" colSpan={2}>
-              {tc('total')}
-            </td>
-            <td className="py-2 text-right tabular-nums">₹{inr(data.totalDebit)}</td>
-            <td className="py-2 text-right tabular-nums">₹{inr(data.totalCredit)}</td>
-          </tr>
-        </tbody>
-      </table>
-    </Card>
-  );
-}
-
-function ProfitLoss({
-  data,
-}: {
-  data: {
-    from: string;
-    to: string;
-    income: { ledger: string; amount: number }[];
-    expenses: { ledger: string; amount: number }[];
-    totalIncome: number;
-    totalExpenses: number;
-    netProfit: number;
-  };
-}) {
-  const t = useTranslations('reports');
-  return (
-    <Card>
-      <h3 className="mb-3 text-sm font-semibold">
-        {t('profitLossRange', { from: data.from, to: data.to })}
-      </h3>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase text-faint">{t('income')}</h4>
-          {data.income.map((row) => (
-            <div key={row.ledger} className="flex justify-between border-b border-slate-50 py-1.5 text-sm">
-              <span>{row.ledger}</span>
-              <span className="tabular-nums">₹{inr(row.amount)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between py-2 text-sm font-bold">
-            <span>{t('totalIncome')}</span>
-            <span className="tabular-nums">₹{inr(data.totalIncome)}</span>
-          </div>
-        </div>
-        <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase text-faint">{t('expenses')}</h4>
-          {data.expenses.map((row) => (
-            <div key={row.ledger} className="flex justify-between border-b border-slate-50 py-1.5 text-sm">
-              <span>{row.ledger}</span>
-              <span className="tabular-nums">₹{inr(row.amount)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between py-2 text-sm font-bold">
-            <span>{t('totalExpenses')}</span>
-            <span className="tabular-nums">₹{inr(data.totalExpenses)}</span>
-          </div>
-        </div>
-      </div>
-      <div
-        className={`mt-4 rounded-lg p-3 text-center text-sm font-bold ${
-          data.netProfit >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
-        }`}
-      >
-        {data.netProfit >= 0 ? t('netProfit') : t('netLoss')}: ₹{inr(Math.abs(data.netProfit))}
-      </div>
-    </Card>
-  );
-}
-
-function BalanceSheet({
-  data,
-}: {
-  data: {
-    asOf: string;
-    assets: { ledger: string; amount: number }[];
-    liabilities: { ledger: string; amount: number }[];
-    profitAndLoss: number;
-    totalAssets: number;
-    totalLiabilities: number;
-  };
-}) {
-  const t = useTranslations('reports');
-  const tc = useTranslations('common');
-  return (
-    <Card>
-      <h3 className="mb-3 text-sm font-semibold">{t('balanceSheetAsOf', { date: data.asOf })}</h3>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase text-faint">
-            {t('liabilitiesCapital')}
-          </h4>
-          {data.liabilities.map((row) => (
-            <div key={row.ledger} className="flex justify-between border-b border-slate-50 py-1.5 text-sm">
-              <span>{row.ledger}</span>
-              <span className="tabular-nums">₹{inr(row.amount)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between border-b border-slate-50 py-1.5 text-sm">
-            <span>{t('profitLossAccount')}</span>
-            <span className="tabular-nums">₹{inr(data.profitAndLoss)}</span>
-          </div>
-          <div className="flex justify-between py-2 text-sm font-bold">
-            <span>{tc('total')}</span>
-            <span className="tabular-nums">₹{inr(data.totalLiabilities)}</span>
-          </div>
-        </div>
-        <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase text-faint">{t('assets')}</h4>
-          {data.assets.map((row) => (
-            <div key={row.ledger} className="flex justify-between border-b border-slate-50 py-1.5 text-sm">
-              <span>{row.ledger}</span>
-              <span className="tabular-nums">₹{inr(row.amount)}</span>
-            </div>
-          ))}
-          <div className="flex justify-between py-2 text-sm font-bold">
-            <span>{tc('total')}</span>
-            <span className="tabular-nums">₹{inr(data.totalAssets)}</span>
-          </div>
-        </div>
-      </div>
-    </Card>
   );
 }
 
@@ -378,49 +214,164 @@ function Gstr1({
   );
 }
 
-function Gstr3b({
+interface CreditDebitRow {
+  id: string;
+  date: string;
+  description: string;
+  debit: number;
+  credit: number;
+}
+
+interface CreditDebitReportData {
+  rows: CreditDebitRow[];
+  totalDebit: number;
+  totalCredit: number;
+  netAmount: number;
+}
+
+function CreditDebitReport({
+  title,
   data,
 }: {
-  data: {
-    from: string;
-    to: string;
-    outwardSupplies: { taxable: number; cgst: number; sgst: number; igst: number };
-    eligibleItc: { taxable: number; cgst: number; sgst: number; igst: number };
-    netPayable: { cgst: number; sgst: number; igst: number };
-  };
+  title: string;
+  data: CreditDebitReportData;
 }) {
   const t = useTranslations('reports');
-  const Row = ({ label, v }: { label: string; v: { taxable?: number; cgst: number; sgst: number; igst: number } }) => (
-    <tr className="border-b border-line hover:bg-subtle">
-      <td className="py-2">{label}</td>
-      <td className="py-2 text-right tabular-nums">{v.taxable !== undefined ? inr(v.taxable) : '—'}</td>
-      <td className="py-2 text-right tabular-nums">{inr(v.cgst)}</td>
-      <td className="py-2 text-right tabular-nums">{inr(v.sgst)}</td>
-      <td className="py-2 text-right tabular-nums">{inr(v.igst)}</td>
-    </tr>
-  );
+  const tc = useTranslations('common');
+  const td = useTranslations('docEntry');
+
   return (
-    <Card>
-      <h3 className="mb-3 text-sm font-semibold">
-        {t('gstr3bHeader', { from: data.from, to: data.to })}
-      </h3>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-line bg-subtle text-left text-[11px] font-semibold uppercase tracking-wide text-muted">
-            <th className="py-2">{t('section')}</th>
-            <th className="py-2 text-right">{t('taxable')}</th>
-            <th className="py-2 text-right">CGST</th>
-            <th className="py-2 text-right">SGST</th>
-            <th className="py-2 text-right">IGST</th>
-          </tr>
-        </thead>
-        <tbody>
-          <Row label={t('gstr3bOutwardSupplies')} v={data.outwardSupplies} />
-          <Row label={t('gstr3bEligibleItc')} v={data.eligibleItc} />
-          <Row label={t('gstr3bNetPayable')} v={data.netPayable} />
-        </tbody>
-      </table>
-      <p className="mt-3 text-xs text-faint">{t('gstr3bNote')}</p>
-    </Card>
+    <div className="space-y-6">
+      {/* Metrics Banner */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {/* Debit metric */}
+        <Card className="flex flex-col justify-between transition-shadow hover:shadow-md">
+          <div>
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted">
+              <span>{t('totalDebit')}</span>
+              <span className="text-rose-500">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                </svg>
+              </span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-ink tabular-nums">
+              ₹{inr(data.totalDebit)}
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-faint">Cumulative charges & bills billed</p>
+        </Card>
+
+        {/* Credit metric */}
+        <Card className="flex flex-col justify-between transition-shadow hover:shadow-md">
+          <div>
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-muted">
+              <span>{t('totalCredit')}</span>
+              <span className="text-emerald-500">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                </svg>
+              </span>
+            </div>
+            <div className="mt-2 text-2xl font-bold text-ink tabular-nums">
+              ₹{inr(data.totalCredit)}
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] text-faint">Cumulative payments received</p>
+        </Card>
+
+        {/* Net Money metric */}
+        <div className={`flex flex-col justify-between rounded-xl border p-5 shadow-[0_1px_2px_rgba(16,24,40,0.04),0_1px_3px_rgba(16,24,40,0.06)] transition-shadow hover:shadow-md ${
+          data.netAmount >= 0 
+            ? 'border-emerald-200 bg-emerald-50/40 text-emerald-800' 
+            : 'border-rose-200 bg-rose-50/40 text-rose-800'
+        }`}>
+          <div>
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wider opacity-85">
+              <span>{t('totalMoney')}</span>
+              <span>
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </span>
+            </div>
+            <div className="mt-2 text-2xl font-extrabold tabular-nums">
+              {data.netAmount < 0 ? '− ' : ''}₹{inr(Math.abs(data.netAmount))}
+            </div>
+          </div>
+          <p className="mt-2 text-[11px] opacity-75">Net cash position (Credit − Debit)</p>
+        </div>
+      </div>
+
+      {/* Main Table Card */}
+      <Card 
+        title={title} 
+        action={
+          <span className="rounded-full bg-subtle px-2.5 py-0.5 text-xs font-semibold text-muted">
+            {data.rows.length} {data.rows.length === 1 ? 'record' : 'records'}
+          </span>
+        }
+      >
+        <div className="overflow-x-auto -mx-5 -mb-5">
+          <table className="w-full min-w-[650px] text-sm">
+            <thead>
+              <tr className="border-b border-line bg-subtle/50 text-left text-[11px] font-semibold uppercase tracking-wider text-muted">
+                <th className="py-2.5 pl-5 w-32">{tc('date')}</th>
+                <th className="py-2.5 w-40">{tc('type') || 'Transaction'}</th>
+                <th className="py-2.5 pl-2">{td('description')}</th>
+                <th className="py-2.5 text-right pr-6 w-36">{t('debit')}</th>
+                <th className="py-2.5 text-right pr-5 w-36">{t('credit')}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {data.rows.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="py-12 text-center text-muted">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <svg className="h-8 w-8 text-faint" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      <span className="text-sm font-medium">{t('noRecords') || 'No transaction records found'}</span>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                data.rows.map((row) => {
+                  const isDebit = row.debit > 0;
+                  return (
+                    <tr 
+                      key={row.id} 
+                      className="group transition-colors hover:bg-subtle/40"
+                    >
+                      <td className="py-3 pl-5 text-muted font-medium">
+                        {new Date(row.date).toLocaleDateString('en-IN', {
+                          day: '2-digit',
+                          month: 'short',
+                          year: 'numeric'
+                        })}
+                      </td>
+                      <td className="py-3">
+                        <Badge tone={isDebit ? 'bad' : 'good'}>
+                          {isDebit ? t('debit') : t('credit')}
+                        </Badge>
+                      </td>
+                      <td className="py-3 pl-2 font-medium text-ink group-hover:text-brand-700 transition-colors">
+                        {row.description}
+                      </td>
+                      <td className="py-3 text-right pr-6 tabular-nums font-semibold text-rose-600 dark:text-rose-400">
+                        {isDebit ? `₹${inr(row.debit)}` : '—'}
+                      </td>
+                      <td className="py-3 text-right pr-5 tabular-nums font-semibold text-emerald-600 dark:text-emerald-400">
+                        {!isDebit ? `₹${inr(row.credit)}` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
   );
 }

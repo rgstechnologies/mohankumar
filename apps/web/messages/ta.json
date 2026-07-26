@@ -133,8 +133,8 @@
       "print-settings": "அச்சு அமைப்புகள்",
       "payment-in": "பணம் வரவு",
       "payment-out": "பணம் செலவு",
-      "estimate-payments": "மதிப்பீட்டு பணம் வரவு",
-      "invoice-payments": "விலைப்பட்டியல் பணம் வரவு"
+      "estimate-payments": "பணம் வரவு",
+      "invoice-payments": "பணம் வரவு"
     },
     "roles": {
       "OWNER": "உரிமையாளர்",
@@ -1593,9 +1593,14 @@
       "profit-loss": "இலாப நட்டக் கணக்கு",
       "balance-sheet": "இருப்புநிலைக் குறிப்பு",
       "gstr1": "GSTR-1",
-      "gstr3b": "GSTR-3B"
+      "gstr3b": "GSTR-3B",
+      "estimates": "மதிப்பீட்டு அறிக்கை",
+      "sales": "விற்பனை அறிக்கை"
     },
     "loadingReport": "அறிக்கை ஏற்றப்படுகிறது…",
+    "totalDebit": "மொத்த பற்று",
+    "totalCredit": "மொத்த வரவு",
+    "totalMoney": "மொத்த தொகை (வரவு - பற்று)",
     "trialBalanceAsOf": "{date} அன்றைய இருப்பாய்வு",
     "ledger": "பேரேடு",
     "group": "குழு",
@@ -2579,6 +2584,7 @@
     "applyTaxHint": "வரியில்லா மதிப்பீட்டிற்கு அணைக்கவும்",
     "items": "உருப்படிகள்",
     "freeText": "தனி உரை வரி",
+    "selectItem": "உருப்படியைத் தேர்ந்தெடுக்கவும்…",
     "itemSearchPlaceholder": "பொருள் பெயர், குறியீடு அல்லது HSN மூலம் தேடவும்…",
     "noItemsFound": "பொருட்கள் எதுவும் கிடைக்கவில்லை",
     "itemOptionCode": "குறியீடு: {code}",

@@ -135,7 +135,8 @@ export interface PartyPaymentView {
   reference: string | null;
   note: string | null;
   estimateId: string | null;
-  purchaseEstimateId?: string | null;
+  purchaseEstimateId: string | null;
+  source: string | null;
   advanceRef: string | null;
 }
 

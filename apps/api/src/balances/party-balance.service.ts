@@ -159,7 +159,7 @@ export class PartyBalanceService {
             r.creditNotes.reduce((s, n) => s + Number(n.total), 0);
           return {
             id: r.id,
-            no: `INV/${r.fiscalYear}/${String(r.invoiceNo).padStart(4, '0')}`,
+            no: `AGI/${r.fiscalYear}/${String(r.invoiceNo).padStart(4, '0')}`,
             date: r.date,
             total: Number(r.total),
             paid: r2(paid),
@@ -172,7 +172,11 @@ export class PartyBalanceService {
     const rows = await this.prisma.estimate.findMany({
       where: { companyId, partyId, status: EST_ACTIVE },
       select: {
-        id: true, estimateNo: true, fiscalYear: true, date: true, total: true,
+        id: true,
+        estimateNo: true,
+        fiscalYear: true,
+        date: true,
+        total: true,
         payments: { select: { amount: true } },
       },
       orderBy: { date: 'asc' },
@@ -182,7 +186,7 @@ export class PartyBalanceService {
         const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
         return {
           id: r.id,
-          no: `EST/${r.fiscalYear}/${String(r.estimateNo).padStart(4, '0')}`,
+          no: `AGE/${r.fiscalYear}/${String(r.estimateNo).padStart(4, '0')}`,
           date: r.date,
           total: Number(r.total),
           paid: r2(paid),

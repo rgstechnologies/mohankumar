@@ -581,7 +581,7 @@ export class EstimatesService {
   }
 
   private displayNo(fiscalYear: string, no: number) {
-    return `EST/${fiscalYear}/${String(no).padStart(4, '0')}`;
+    return `AGE/${fiscalYear}/${String(no).padStart(4, '0')}`;
   }
 
   private readonly fullInclude = {
@@ -670,7 +670,7 @@ export class EstimatesService {
       invoice: estimate.invoice
         ? {
             id: estimate.invoice.id,
-            invoiceNo: `INV/${estimate.invoice.fiscalYear}/${String(estimate.invoice.invoiceNo).padStart(4, '0')}`,
+            invoiceNo: `AGI/${estimate.invoice.fiscalYear}/${String(estimate.invoice.invoiceNo).padStart(4, '0')}`,
           }
         : null,
       subtotal: Number(estimate.subtotal),
