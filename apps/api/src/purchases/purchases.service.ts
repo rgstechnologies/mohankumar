@@ -718,7 +718,7 @@ export class PurchasesService {
         by: ['itemId'],
         where: {
           itemId: { not: null },
-          note: { companyId, status: InvoiceStatus.ISSUED, type: 'CREDIT_NOTE' },
+          note: { companyId, status: InvoiceStatus.ISSUED, type: 'CREDIT_NOTE', invoice: { isOnline: true } },
         },
         _sum: { quantity: true },
       }).then(async (creditIn) => ({

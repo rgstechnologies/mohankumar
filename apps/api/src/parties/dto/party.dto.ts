@@ -202,6 +202,7 @@ export class RecordPartyPaymentDto {
   })
   @IsOptional()
   @IsString()
+  @IsIn(['estimate', 'invoice'])
   source?: string;
 }
 
