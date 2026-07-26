@@ -171,7 +171,7 @@ export class PartyBalanceService {
             r.creditNotes.reduce((s, n) => s + Number(n.total), 0);
           return {
             id: r.id,
-            no: `AGI/${r.fiscalYear}/${String(r.invoiceNo).padStart(4, '0')}`,
+            no: `INV/${r.fiscalYear}/${String(r.invoiceNo).padStart(4, '0')}`,
             date: r.date,
             total: Number(r.total),
             paid: r2(paid),

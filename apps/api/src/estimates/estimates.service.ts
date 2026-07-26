@@ -670,7 +670,7 @@ export class EstimatesService {
       invoice: estimate.invoice
         ? {
             id: estimate.invoice.id,
-            invoiceNo: `AGI/${estimate.invoice.fiscalYear}/${String(estimate.invoice.invoiceNo).padStart(4, '0')}`,
+            invoiceNo: `INV/${estimate.invoice.fiscalYear}/${String(estimate.invoice.invoiceNo).padStart(4, '0')}`,
           }
         : null,
       subtotal: Number(estimate.subtotal),
