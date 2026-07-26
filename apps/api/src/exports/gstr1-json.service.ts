@@ -152,7 +152,7 @@ export class Gstr1JsonService {
 
     const pos = (p: string | null) => p ?? company.stateCode ?? '33';
     const invNo = (fy: string, no: number) =>
-      `AGI/${fy}/${String(no).padStart(4, '0')}`;
+      `INV/${fy}/${String(no).padStart(4, '0')}`;
 
     // ---- B2B (table 4): registered buyers, grouped by their GSTIN ----
     const b2bMap = new Map<string, ReturnType<typeof buildInv>[]>();

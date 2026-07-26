@@ -271,7 +271,7 @@ export class ReportsService {
     const b2b = invoices
       .filter((inv) => inv.party.gstin)
       .map((inv) => ({
-        invoiceNo: `AGI/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: `INV/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
         date: inv.date,
         gstin: inv.party.gstin,
         party: inv.party.name,
@@ -569,7 +569,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((e) => ({
         id: e.id,
-        invoiceNo: `AGE/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
+        invoiceNo: `EST/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
         date: e.date,
         party: e.party.name,
         total: Number(e.total),
@@ -584,7 +584,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((inv) => ({
         id: inv.id,
-        invoiceNo: `AGI/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: `INV/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
         date: inv.date,
         party: inv.party.name,
         total: Number(inv.total),
