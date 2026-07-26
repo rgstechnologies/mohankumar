@@ -450,28 +450,10 @@ describe('ERP API (e2e)', () => {
   });
 
   // ----------------------------------------------------------------
-  // Purchases + stock
+  // Stock
   // ----------------------------------------------------------------
 
-  it('books an intra-state purchase bill with CGST/SGST input credit', async () => {
-    const res = await request(http)
-      .post(`/api/v1/companies/${companyId}/purchase-bills`)
-      .set(auth())
-      .send({
-        partyId: vendorId,
-        date: D(10),
-        supplierBillNo: 'V-001',
-        lines: [{ itemId, quantity: 50, rate: 400 }],
-      })
-      .expect(201);
-    expect(res.body.isInterState).toBe(false); // vendor 33, company 33
-    expect(res.body.taxableAmount).toBe(20000);
-    expect(res.body.cgstAmount).toBe(1800);
-    expect(res.body.sgstAmount).toBe(1800);
-    expect(res.body.total).toBe(23600);
-  });
-
-  it('computes stock from the documents (purchased − sold)', async () => {
+  it('computes stock from the documents (opening − sold)', async () => {
     const res = await request(http)
       .get(`/api/v1/companies/${companyId}/stock`)
       .set(auth())
@@ -484,10 +466,9 @@ describe('ERP API (e2e)', () => {
         onHand: number;
       }[]
     ).find((r) => r.itemId === itemId)!;
-    // Bought 50; sold 10 (converted estimate) + 4 (invoice) = 14.
-    expect(row.purchasedQty).toBe(50);
+    // Opening 0; sold 10 (converted estimate) + 4 (invoice) = 14.
     expect(row.soldQty).toBe(14);
-    expect(row.onHand).toBe(36);
+    expect(row.onHand).toBe(-14);
   });
 
   // ----------------------------------------------------------------

@@ -23,7 +23,7 @@ interface Dashboard {
   invoicesThisMonth: number;
   salesThisFY: number;
   invoicesThisFY: number;
-  purchasesThisMonth: number;
+  purchasesThisMonth?: number;
   cashBank: number;
   receivables: number;
   payables: number;
@@ -95,7 +95,6 @@ function Kpi({
 
 const ICON = {
   sales: <path d="M3 17l6-6 4 4 7-7M15 8h5v5" />,
-  purchases: <path d="M6 6h15l-1.6 8.4a2 2 0 01-2 1.6H9.5a2 2 0 01-2-1.6L6 6zM6 6L5.2 3H2M9 20h.01M17 20h.01" />,
   cash: <path d="M3 7h18v10H3zM3 11h18M7 15h3" />,
   calendar: <path d="M7 3v3M17 3v3M4 8h16M5 5h14v15H5z" />,
   in: <path d="M4 14v5h16v-5M12 4v11M8 11l4 4 4-4" />,
@@ -125,7 +124,7 @@ export function OverviewTab({ companyId }: { companyId: string }) {
   return (
     <div className="space-y-6">
       {/* KPI row */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
         <Kpi
           label={t('salesThisMonth')}
           value={`₹${inr(data.salesThisMonth)}`}
@@ -134,12 +133,6 @@ export function OverviewTab({ companyId }: { companyId: string }) {
           accent="emerald"
           icon={ICON.sales}
           highlight
-        />
-        <Kpi
-          label={t('purchasesThisMonth')}
-          value={`₹${inr(data.purchasesThisMonth)}`}
-          accent="brand"
-          icon={ICON.purchases}
         />
         <Kpi label={t('cashBank')} value={`₹${inr(data.cashBank)}`} accent="brand" icon={ICON.cash} />
         <Kpi
@@ -153,7 +146,7 @@ export function OverviewTab({ companyId }: { companyId: string }) {
 
       {/* Charts row */}
       <div className="grid gap-6 xl:grid-cols-3">
-        <Card className="xl:col-span-2" title={t('salesVsPurchases')}>
+        <Card className="xl:col-span-2" title={t('sales')}>
           <div className="h-72">
             <ResponsiveContainer width="100%" height={288} minWidth={0}>
               <BarChart data={data.monthly} barGap={4}>
@@ -174,18 +167,9 @@ export function OverviewTab({ companyId }: { companyId: string }) {
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  formatter={(value, name) => [
-                    `₹${inr(Number(value))}`,
-                    name === 'sales' ? t('sales') : t('purchases'),
-                  ]}
-                />
-                <Legend
-                  formatter={(value) => (value === 'sales' ? t('sales') : t('purchases'))}
-                  iconType="circle"
-                  wrapperStyle={{ fontSize: 12 }}
+                  formatter={(value) => [`₹${inr(Number(value))}`, t('sales')]}
                 />
                 <Bar dataKey="sales" fill="#673de6" radius={[4, 4, 0, 0]} maxBarSize={36} />
-                <Bar dataKey="purchases" fill="#c7d2fe" radius={[4, 4, 0, 0]} maxBarSize={36} />
               </BarChart>
             </ResponsiveContainer>
           </div>

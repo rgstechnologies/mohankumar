@@ -13,9 +13,6 @@ const FORMS = [
   'proformaInvoice',
   'salesOrder',
   'deliveryChallan',
-  'purchaseBill',
-  'purchaseEstimate',
-  'purchaseOrder',
   'payslip',
 ] as const;
 

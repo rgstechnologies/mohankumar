@@ -246,9 +246,8 @@ function EWayBillSettingsCard({
 }
 
 /**
- * Chooses which document the Payment-In / Payment-Out screens reconcile money
- * against: invoices vs estimates (sales), bills vs purchase-estimates (purchase).
- * In "estimate" mode the estimate is treated as the bill for accounts.
+ * Chooses which document the Payment-In screen reconciles money
+ * against: invoices vs estimates. In "estimate" mode the estimate is treated as the bill for accounts.
  */
 function PaymentLinkSettingsCard({
   companyId,
@@ -261,7 +260,6 @@ function PaymentLinkSettingsCard({
   const tc = useTranslations('common');
   const { toast } = useFeedback();
   const [sales, setSales] = useState<'invoice' | 'estimate'>('invoice');
-  const [purchase, setPurchase] = useState<'purchase' | 'purchaseEstimate'>('purchase');
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -269,15 +267,12 @@ function PaymentLinkSettingsCard({
   useEffect(() => {
     let active = true;
     api
-      .get<{ salesPaymentLink?: string; purchasePaymentLink?: string }>(
+      .get<{ salesPaymentLink?: string }>(
         `/companies/${companyId}`,
       )
       .then((c) => {
         if (!active) return;
         setSales(c.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice');
-        setPurchase(
-          c.purchasePaymentLink === 'purchaseEstimate' ? 'purchaseEstimate' : 'purchase',
-        );
         setLoaded(true);
       })
       .catch(() => setLoaded(true));
@@ -292,7 +287,6 @@ function PaymentLinkSettingsCard({
     try {
       await api.patch(`/companies/${companyId}`, {
         salesPaymentLink: sales,
-        purchasePaymentLink: purchase,
       });
       toast(t('saved'));
     } catch (err) {
@@ -318,24 +312,6 @@ function PaymentLinkSettingsCard({
           </Select>
           <p className="mt-1 text-xs text-faint">
             {sales === 'estimate' ? t('salesEstimateHint') : t('salesInvoiceHint')}
-          </p>
-        </div>
-        <div>
-          <Label>{t('purchaseLabel')}</Label>
-          <Select
-            value={purchase}
-            disabled={!canManage || !loaded}
-            onChange={(e) =>
-              setPurchase(e.target.value as 'purchase' | 'purchaseEstimate')
-            }
-          >
-            <option value="purchase">{t('purchaseBill')}</option>
-            <option value="purchaseEstimate">{t('purchaseEstimate')}</option>
-          </Select>
-          <p className="mt-1 text-xs text-faint">
-            {purchase === 'purchaseEstimate'
-              ? t('purchaseEstimateHint')
-              : t('purchaseBillHint')}
           </p>
         </div>
       </div>

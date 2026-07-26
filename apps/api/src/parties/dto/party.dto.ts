@@ -107,15 +107,14 @@ export class CreatePartyDto {
   image?: string | null;
 
   @ApiPropertyOptional({
-    enum: ['invoice', 'estimate', 'purchase', 'purchaseEstimate'],
+    enum: ['invoice', 'estimate'],
     description:
       "Document type this party's outstanding is tracked against. Customers: " +
-      "'invoice' | 'estimate'; vendors: 'purchase' | 'purchaseEstimate'. " +
-      'Omit/null to inherit the company default.',
+      "'invoice' | 'estimate'. Omit/null to inherit the company default.",
   })
   @IsOptional()
   @ValidateIf((o) => o.balanceDocType != null)
-  @IsIn(['invoice', 'estimate', 'purchase', 'purchaseEstimate'])
+  @IsIn(['invoice', 'estimate'])
   balanceDocType?: string | null;
 
   @ApiPropertyOptional({ description: 'Opening receivable/payable amount' })

@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { AccountingService } from '../accounting/accounting.service';
+import { BatchesService } from '../inventory/batches.service';
 import { InvoicesService } from '../invoices/invoices.service';
-import { PurchasesService } from '../purchases/purchases.service';
 import { ReportsService } from '../reports/reports.service';
 import type { TableDoc } from './table-doc';
 
@@ -12,7 +12,6 @@ export const EXPORTABLE_REPORTS = [
   'gstr1',
   'gstr3b',
   'invoices',
-  'purchases',
   'stock',
   'ledger-statement',
 ] as const;
@@ -33,7 +32,7 @@ export class ExportsService {
   constructor(
     private readonly reports: ReportsService,
     private readonly invoices: InvoicesService,
-    private readonly purchases: PurchasesService,
+    private readonly batches: BatchesService,
     private readonly accounting: AccountingService,
   ) {}
 
@@ -55,8 +54,6 @@ export class ExportsService {
         return this.gstr3b(companyId, query);
       case 'invoices':
         return this.invoiceRegister(companyId);
-      case 'purchases':
-        return this.purchaseRegister(companyId);
       case 'stock':
         return this.stockReport(companyId);
       case 'ledger-statement':
@@ -278,41 +275,8 @@ export class ExportsService {
     };
   }
 
-  private async purchaseRegister(companyId: string): Promise<TableDoc> {
-    const bills = await this.purchases.list(companyId);
-    return {
-      title: 'Purchase Register',
-      fileName: `purchase-register-${today()}`,
-      sheets: [
-        {
-          name: 'Purchases',
-          columns: [
-            { header: 'Bill No', key: 'billNo', width: 1.4 },
-            { header: 'Vendor Bill No', key: 'supplierBillNo', width: 1.2 },
-            { header: 'Date', key: 'date', format: 'date' },
-            { header: 'Vendor', key: 'vendor', width: 1.8 },
-            { header: 'GSTIN', key: 'gstin', width: 1.5 },
-            { header: 'Taxable', key: 'taxableAmount', format: 'currency' },
-            { header: 'CGST', key: 'cgstAmount', format: 'currency' },
-            { header: 'SGST', key: 'sgstAmount', format: 'currency' },
-            { header: 'IGST', key: 'igstAmount', format: 'currency' },
-            { header: 'Total', key: 'total', format: 'currency' },
-            { header: 'Paid', key: 'paidAmount', format: 'currency' },
-            { header: 'Outstanding', key: 'outstanding', format: 'currency' },
-            { header: 'Status', key: 'paymentStatus' },
-          ],
-          rows: bills.map((bill) => ({
-            ...bill,
-            vendor: bill.party.name,
-            gstin: bill.party.gstin,
-          })),
-        },
-      ],
-    };
-  }
-
   private async stockReport(companyId: string): Promise<TableDoc> {
-    const stock = await this.purchases.stockReport(companyId);
+    const stock = await this.batches.stockReport(companyId);
     return {
       title: 'Stock Report',
       subtitle: `As of ${today()}`,
@@ -332,7 +296,7 @@ export class ExportsService {
             { header: 'Stock Value', key: 'stockValue', format: 'currency' },
             { header: 'Low Stock', key: 'low' },
           ],
-          rows: stock.map((s) => ({ ...s, low: s.lowStock ? 'YES' : '' })),
+          rows: stock.map((s) => ({ ...s, low: s.isLowStock ? 'YES' : '' })),
           totalsRow: {
             name: 'Total',
             stockValue: Math.round(stock.reduce((sum, s) => sum + s.stockValue, 0) * 100) / 100,

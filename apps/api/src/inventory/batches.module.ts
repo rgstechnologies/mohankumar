@@ -28,9 +28,23 @@ class BatchesController {
   }
 }
 
+@ApiTags('stock')
+@ApiBearerAuth()
+@UseGuards(CompanyRoleGuard)
+@Controller('companies/:companyId')
+class StockController {
+  constructor(private readonly batches: BatchesService) {}
+
+  @Get('stock')
+  @ApiOperation({ summary: 'Stock on hand per item with valuation + low-stock flags' })
+  stock(@Param('companyId', ParseUUIDPipe) companyId: string) {
+    return this.batches.stockReport(companyId);
+  }
+}
+
 @Global()
 @Module({
-  controllers: [BatchesController],
+  controllers: [BatchesController, StockController],
   providers: [BatchesService],
   exports: [BatchesService],
 })

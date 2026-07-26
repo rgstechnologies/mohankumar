@@ -65,7 +65,6 @@
       "contacts": "Contacts",
       "organization": "Organization",
       "sales": "Sales",
-      "purchase": "Purchase",
       "settings": "Settings"
     },
     "nav": {
@@ -73,9 +72,6 @@
       "pos": "Point of Sale",
       "invoices": "Sales Bills",
       "estimates": "Estimate Bills",
-      "purchaseOrders": "Purchase Orders",
-      "purchases": "Purchases",
-      "purchaseEstimates": "Purchase Estimates",
       "notes": "Credit/Debit Notes",
       "vouchers": "Vouchers",
       "stock": "Stock",
@@ -98,7 +94,6 @@
       "proformaInvoices": "Proforma Invoices",
       "printSettings": "Print Settings",
       "paymentIn": "Payment In",
-      "paymentOut": "Payment Out",
       "estimatePayments": "Estimate Payment-In",
       "invoicePayments": "Invoice Payment-In"
     },
@@ -107,14 +102,11 @@
       "pos": "Point of Sale",
       "invoices": "Sales Bills",
       "estimates": "Estimate Bills",
-      "purchases": "Purchase Bills",
-      "purchase-estimates": "Purchase Estimates",
       "stock": "Stock",
       "reports": "Financial Reports",
       "ledgers": "Ledgers",
       "banking": "Banks",
       "notes": "Credit & Debit Notes",
-      "purchase-orders": "Purchase Orders",
       "branches": "Branches",
       "vouchers": "Vouchers",
       "parties": "Customers & Vendors",
@@ -132,7 +124,6 @@
       "proforma-invoices": "Proforma Invoices",
       "print-settings": "Print Settings",
       "payment-in": "Payment In",
-      "payment-out": "Payment Out",
       "estimate-payments": "Estimate Payment-In",
       "invoice-payments": "Invoice Payment-In"
     },

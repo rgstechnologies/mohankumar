@@ -37,11 +37,8 @@ export class NotesService {
    * source still carries after earlier notes.
    */
   async create(companyId: string, userId: string, dto: CreateNoteDto) {
-    if (dto.type === NoteType.CREDIT_NOTE && !dto.invoiceId) {
-      throw new BadRequestException('A credit note needs the source invoiceId');
-    }
-    if (dto.type === NoteType.DEBIT_NOTE && !dto.purchaseBillId) {
-      throw new BadRequestException('A debit note needs the source purchaseBillId');
+    if (!dto.invoiceId) {
+      throw new BadRequestException('A note needs the source invoiceId');
     }
 
     const company = await this.prisma.company.findUniqueOrThrow({
@@ -50,16 +47,10 @@ export class NotesService {
     });
 
     // Load the source document (also gives us party + inter-state flag).
-    const source =
-      dto.type === NoteType.CREDIT_NOTE
-        ? await this.prisma.invoice.findFirst({
-            where: { id: dto.invoiceId!, companyId, status: InvoiceStatus.ISSUED },
-            include: { party: true, creditNotes: { where: { status: InvoiceStatus.ISSUED } } },
-          })
-        : await this.prisma.purchaseBill.findFirst({
-            where: { id: dto.purchaseBillId!, companyId, status: InvoiceStatus.ISSUED },
-            include: { party: true, debitNotes: { where: { status: InvoiceStatus.ISSUED } } },
-          });
+    const source = await this.prisma.invoice.findFirst({
+      where: { id: dto.invoiceId, companyId, status: InvoiceStatus.ISSUED },
+      include: { party: true, creditNotes: { where: { status: InvoiceStatus.ISSUED } } },
+    });
     if (!source) {
       throw new NotFoundException('Source document not found or cancelled');
     }
@@ -106,10 +97,7 @@ export class NotesService {
     );
 
     // Cap: existing notes + this note must not exceed the source value.
-    const priorNotes =
-      dto.type === NoteType.CREDIT_NOTE
-        ? (source as { creditNotes: { total: Prisma.Decimal }[] }).creditNotes
-        : (source as { debitNotes: { total: Prisma.Decimal }[] }).debitNotes;
+    const priorNotes = source.creditNotes;
     const alreadyNoted = priorNotes.reduce((s, n) => s + Number(n.total), 0);
     const remaining =
       Math.round((Number(source.total) - alreadyNoted) * 100) / 100;
@@ -287,7 +275,6 @@ export class NotesService {
   private readonly fullInclude = {
     party: { select: { id: true, name: true, gstin: true } },
     invoice: { select: { invoiceNo: true, fiscalYear: true } },
-    purchaseBill: { select: { billNo: true, fiscalYear: true } },
     lines: { orderBy: { lineNo: 'asc' as const } },
   };
 
@@ -298,7 +285,7 @@ export class NotesService {
     const names =
       type === NoteType.CREDIT_NOTE
         ? ['Sales', 'CGST Payable', 'SGST Payable', 'IGST Payable', 'Rounding Off']
-        : ['Purchases', 'CGST Input', 'SGST Input', 'IGST Input', 'Rounding Off'];
+        : ['Sales', 'CGST Payable', 'SGST Payable', 'IGST Payable', 'Rounding Off'];
     const ledgers = await this.prisma.ledger.findMany({
       where: { companyId, name: { in: names } },
       select: { id: true, name: true },
@@ -329,7 +316,6 @@ export class NotesService {
     total: Prisma.Decimal;
     party: { id: string; name: string; gstin: string | null };
     invoice: { invoiceNo: number; fiscalYear: string } | null;
-    purchaseBill: { billNo: number; fiscalYear: string } | null;
     lines: {
       lineNo: number;
       description: string;
@@ -350,9 +336,7 @@ export class NotesService {
       party: note.party,
       against: note.invoice
         ? `INV/${note.invoice.fiscalYear}/${String(note.invoice.invoiceNo).padStart(4, '0')}`
-        : note.purchaseBill
-          ? `PB/${note.purchaseBill.fiscalYear}/${String(note.purchaseBill.billNo).padStart(4, '0')}`
-          : null,
+        : null,
       taxableAmount: Number(note.taxableAmount),
       cgstAmount: Number(note.cgstAmount),
       sgstAmount: Number(note.sgstAmount),

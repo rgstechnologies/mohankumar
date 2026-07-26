@@ -425,30 +425,21 @@ export class ReportsService {
   // Dashboard
   // -------------------------------------------------------------
 
-  /** Sales vs purchases per month for the last `months` months (for charts). */
+  /** Sales per month for the last `months` months (for charts). */
   private async monthlySeries(companyId: string, months = 6) {
     const start = new Date();
     start.setUTCDate(1);
     start.setUTCHours(0, 0, 0, 0);
     start.setUTCMonth(start.getUTCMonth() - (months - 1));
 
-    const [sales, purchases] = await Promise.all([
-      this.prisma.$queryRaw<{ month: string; total: number }[]>`
+    const sales = await this.prisma.$queryRaw<{ month: string; total: number }[]>`
         SELECT to_char(date_trunc('month', "date"), 'YYYY-MM') AS month,
                COALESCE(SUM("total"), 0)::float AS total
         FROM "invoices"
         WHERE "companyId" = ${companyId} AND "status" = 'ISSUED' AND "date" >= ${start}
-        GROUP BY 1`,
-      this.prisma.$queryRaw<{ month: string; total: number }[]>`
-        SELECT to_char(date_trunc('month', "date"), 'YYYY-MM') AS month,
-               COALESCE(SUM("total"), 0)::float AS total
-        FROM "purchase_bills"
-        WHERE "companyId" = ${companyId} AND "status" = 'ISSUED' AND "date" >= ${start}
-        GROUP BY 1`,
-    ]);
+        GROUP BY 1`;
 
     const salesByMonth = new Map(sales.map((r) => [r.month, r.total]));
-    const purchasesByMonth = new Map(purchases.map((r) => [r.month, r.total]));
 
     const series: { month: string; label: string; sales: number; purchases: number }[] = [];
     const cursor = new Date(start);
@@ -458,7 +449,7 @@ export class ReportsService {
         month: key,
         label: cursor.toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' }),
         sales: r2(salesByMonth.get(key) ?? 0),
-        purchases: r2(purchasesByMonth.get(key) ?? 0),
+        purchases: 0,
       });
       cursor.setUTCMonth(cursor.getUTCMonth() + 1);
     }
@@ -479,7 +470,7 @@ export class ReportsService {
 
     // The Overview reflects the selected Payment Link: when sales payments
     // reconcile against estimates, the sales figures are derived from estimates
-    // rather than invoices. Purchases always come from purchase bills.
+    // rather than invoices.
     const salesViaEstimate = company.salesPaymentLink === 'estimate';
     const estActive = { notIn: [EstimateStatus.CANCELLED, EstimateStatus.DECLINED] };
 
@@ -496,15 +487,10 @@ export class ReportsService {
             _count: true,
           });
 
-    const [salesMTD, salesFY, purchasesMTD, nets, items, soldQty, boughtQty] =
+    const [salesMTD, salesFY, nets, items, soldQty] =
       await Promise.all([
         aggSales(monthStart),
         aggSales(fyStartDate),
-        this.prisma.purchaseBill.aggregate({
-          where: { companyId, status: InvoiceStatus.ISSUED, date: { gte: monthStart } },
-          _sum: { total: true },
-          _count: true,
-        }),
         this.ledgerNets(companyId, { includeOpening: true }),
         this.prisma.item.findMany({
           where: { companyId, isActive: true, reorderLevel: { not: null } },
@@ -512,11 +498,6 @@ export class ReportsService {
         this.prisma.invoiceLine.groupBy({
           by: ['itemId'],
           where: { itemId: { not: null }, invoice: { companyId, status: InvoiceStatus.ISSUED } },
-          _sum: { quantity: true },
-        }),
-        this.prisma.purchaseBillLine.groupBy({
-          by: ['itemId'],
-          where: { itemId: { not: null }, bill: { companyId, status: InvoiceStatus.ISSUED } },
           _sum: { quantity: true },
         }),
       ]);
@@ -594,13 +575,9 @@ export class ReportsService {
     const soldMap = new Map(
       soldQty.map((row) => [row.itemId as string, Number(row._sum.quantity ?? 0)]),
     );
-    const boughtMap = new Map(
-      boughtQty.map((row) => [row.itemId as string, Number(row._sum.quantity ?? 0)]),
-    );
     const lowStockCount = items.filter((item) => {
       const onHand =
-        Number(item.openingStock) +
-        (boughtMap.get(item.id) ?? 0) -
+        Number(item.openingStock) -
         (soldMap.get(item.id) ?? 0);
       return onHand <= Number(item.reorderLevel);
     }).length;
@@ -614,7 +591,7 @@ export class ReportsService {
       invoicesThisMonth: salesMTD._count,
       salesThisFY: Number(salesFY._sum.total ?? 0),
       invoicesThisFY: salesFY._count,
-      purchasesThisMonth: Number(purchasesMTD._sum.total ?? 0),
+      purchasesThisMonth: 0,
       cashBank,
       receivables,
       payables,
