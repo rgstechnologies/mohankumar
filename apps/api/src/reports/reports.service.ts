@@ -569,7 +569,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((e) => ({
         id: e.id,
-        invoiceNo: `AGE/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
+        invoiceNo: `EST/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
         date: e.date,
         party: e.party.name,
         total: Number(e.total),

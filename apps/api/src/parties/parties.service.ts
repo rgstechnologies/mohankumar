@@ -321,7 +321,7 @@ export class PartiesService {
       if (!est) {
         throw new BadRequestException('Estimate not found for this customer');
       }
-      advanceRef = `AGE/${est.fiscalYear}/${String(est.estimateNo).padStart(4, '0')}`;
+      advanceRef = `EST/${est.fiscalYear}/${String(est.estimateNo).padStart(4, '0')}`;
     }
 
     const base = isCustomer
@@ -398,7 +398,7 @@ export class PartiesService {
       estimateId: p.estimateId,
       source: p.source,
       advanceRef: p.estimate
-        ? `AGE/${p.estimate.fiscalYear}/${String(p.estimate.estimateNo).padStart(4, '0')}`
+        ? `EST/${p.estimate.fiscalYear}/${String(p.estimate.estimateNo).padStart(4, '0')}`
         : null,
     }));
   }

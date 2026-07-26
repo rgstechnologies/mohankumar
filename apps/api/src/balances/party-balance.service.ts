@@ -194,7 +194,7 @@ export class PartyBalanceService {
           const paid = r.payments.reduce((s, p) => s + Number(p.amount), 0);
           return {
             id: r.id,
-            no: `AGE/${r.fiscalYear}/${String(r.estimateNo).padStart(4, '0')}`,
+            no: `EST/${r.fiscalYear}/${String(r.estimateNo).padStart(4, '0')}`,
             date: r.date,
             total: Number(r.total),
             paid: r2(paid),

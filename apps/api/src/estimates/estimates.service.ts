@@ -581,7 +581,7 @@ export class EstimatesService {
   }
 
   private displayNo(fiscalYear: string, no: number) {
-    return `AGE/${fiscalYear}/${String(no).padStart(4, '0')}`;
+    return `EST/${fiscalYear}/${String(no).padStart(4, '0')}`;
   }
 
   private readonly fullInclude = {
