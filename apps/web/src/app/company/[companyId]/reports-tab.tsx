@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ExportButtons } from '@/components/table';
 import { useFeedback } from '@/components/feedback';
-import { Button, Card, HelpTip, Badge } from '@/components/ui';
+import { Button, Card, HelpTip, Badge, Input, Label } from '@/components/ui';
 import { inr } from '@/lib/accounting';
 import { api, ApiError, downloadFile } from '@/lib/api';
 
@@ -12,9 +12,20 @@ type Report = 'gstr1' | 'estimates' | 'sales';
 
 const REPORTS: Report[] = ['gstr1', 'estimates', 'sales'];
 
+/** Start/end of the current Indian financial year (1 Apr – 31 Mar). */
+function currentFinancialYear(): { from: string; to: string } {
+  const now = new Date();
+  const startYear = now.getMonth() + 1 >= 4 ? now.getFullYear() : now.getFullYear() - 1;
+  return { from: `${startYear}-04-01`, to: `${startYear + 1}-03-31` };
+}
+
 export function ReportsTab({ companyId }: { companyId: string }) {
   const t = useTranslations('reports');
   const [report, setReport] = useState<Report>('gstr1');
+  // The Estimate/Sales reports are scoped to a date range (defaults to the
+  // current financial year). GSTR-1 has its own month selector and ignores it.
+  const [range, setRange] = useState(currentFinancialYear);
+  const dateScoped = report === 'estimates' || report === 'sales';
   // Data is tagged with the report it belongs to — switching reports renders
   // the loading state until the matching response arrives, and a slow stale
   // response can never be shown under the wrong report.
@@ -24,11 +35,13 @@ export function ReportsTab({ companyId }: { companyId: string }) {
   } | null>(null);
 
   const load = useCallback(async () => {
+    const scoped = report === 'estimates' || report === 'sales';
+    const qs = scoped ? `?from=${range.from}&to=${range.to}` : '';
     const payload = await api.get<Record<string, unknown>>(
-      `/companies/${companyId}/reports/${report}`,
+      `/companies/${companyId}/reports/${report}${qs}`,
     );
     setData({ report, payload });
-  }, [companyId, report]);
+  }, [companyId, report, range.from, range.to]);
 
   useEffect(() => {
     void load();
@@ -54,12 +67,39 @@ export function ReportsTab({ companyId }: { companyId: string }) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {report === 'gstr1' && <PortalJsonButton companyId={companyId} />}
-          <ExportButtons 
-            companyId={companyId} 
-            report={report === 'estimates' ? 'estimate-report' : report === 'sales' ? 'sales-report' : report} 
+          <ExportButtons
+            companyId={companyId}
+            report={report === 'estimates' ? 'estimate-report' : report === 'sales' ? 'sales-report' : report}
+            params={dateScoped ? { from: range.from, to: range.to } : {}}
           />
         </div>
       </div>
+
+      {dateScoped && (
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <Label>{t('range.from')}</Label>
+            <Input
+              type="date"
+              value={range.from}
+              max={range.to}
+              onChange={(e) => setRange((r) => ({ ...r, from: e.target.value }))}
+            />
+          </div>
+          <div>
+            <Label>{t('range.to')}</Label>
+            <Input
+              type="date"
+              value={range.to}
+              min={range.from}
+              onChange={(e) => setRange((r) => ({ ...r, to: e.target.value }))}
+            />
+          </div>
+          <Button variant="secondary" onClick={() => setRange(currentFinancialYear())}>
+            {t('range.currentFy')}
+          </Button>
+        </div>
+      )}
 
       {!current ? (
         <p className="text-sm text-muted">{t('loadingReport')}</p>

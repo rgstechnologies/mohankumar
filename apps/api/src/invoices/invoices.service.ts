@@ -17,6 +17,7 @@ import type { VoucherLineDto } from '../accounting/dto/accounting.dto';
 import { fiscalYearOf } from '../accounting/fiscal-year.util';
 import { BatchesService } from '../inventory/batches.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { invoiceNo } from '../common/document-number.util';
 import type { CreateInvoiceDto, RecordPaymentDto } from './dto/invoice.dto';
 import { calculateInvoice, type CalcLineInput } from './gst-calculator';
 import type { FullInvoice } from './invoice-pdf.service';
@@ -804,7 +805,7 @@ export class InvoicesService {
     const voucherDto = {
       type: VoucherType.RECEIPT,
       date: dto.date,
-      narration: `Payment received against invoice INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
+      narration: `Payment received against invoice ${invoiceNo(invoice.fiscalYear, invoice.invoiceNo)}`,
       lines: [
         { ledgerId: dto.ledgerId, type: EntryType.DEBIT, amount: dto.amount },
         {
@@ -983,7 +984,7 @@ export class InvoicesService {
     const settled = paidAmount + notesTotal;
     return {
       id: invoice.id,
-      invoiceNo: `INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
+      invoiceNo: invoiceNo(invoice.fiscalYear, invoice.invoiceNo),
       date: invoice.date,
       dueDate: invoice.dueDate,
       placeOfSupply: invoice.placeOfSupply,

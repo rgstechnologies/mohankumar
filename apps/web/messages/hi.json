@@ -1598,6 +1598,11 @@
       "sales": "बिक्री रिपोर्ट"
     },
     "loadingReport": "रिपोर्ट लोड हो रही है…",
+    "range": {
+      "from": "से",
+      "to": "तक",
+      "currentFy": "वर्तमान वित्त वर्ष"
+    },
     "totalDebit": "कुल नामे",
     "totalCredit": "कुल जमा",
     "totalMoney": "कुल राशि (जमा - नामे)",
