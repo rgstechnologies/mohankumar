@@ -89,6 +89,7 @@ export function StockTab({
           onHand: editingStock.onHand,
         } : null}
         items={items ?? []}
+        stockRows={stock}
         onSaved={handleModalSaved}
         onClose={handleModalClose}
         onDraftCleared={handleDraftCleared}
