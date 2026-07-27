@@ -5,7 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useFeedback } from '@/components/feedback';
 import { Button, ErrorText, Input, Label, Combobox, type ComboOption } from '@/components/ui';
 import { api, ApiError } from '@/lib/api';
-import { type ItemRow } from '@/lib/accounting';
+import { type ItemRow, type StockRow } from '@/lib/accounting';
 
 interface StockUpdateDraft {
   itemId: string;
@@ -28,6 +28,8 @@ interface StockUpdateModalProps {
     onHand: number;
   } | null;
   items: ItemRow[];
+  /** Current stock per item — carries both openingStock and computed onHand. */
+  stockRows: StockRow[];
   onSaved: () => void | Promise<void>;
   onClose: () => void;
   onDraftCleared?: () => void;
@@ -54,6 +56,7 @@ export function StockUpdateModal({
   isOpen,
   initialStockRow,
   items,
+  stockRows,
   onSaved,
   onClose,
   onDraftCleared,
@@ -166,7 +169,14 @@ export function StockUpdateModal({
   function handleItemSelect(itemId: string) {
     const item = items.find((i) => i.id === itemId);
     if (item) {
-      setDraft((current) => ({ ...current, itemId }));
+      // Prefill with the item's current on-hand so the field always shows the
+      // quantity the user is about to overwrite (same as opening from a row).
+      const current = stockRows.find((s) => s.itemId === itemId);
+      setDraft((prev) => ({
+        ...prev,
+        itemId,
+        quantity: current ? String(current.onHand) : '',
+      }));
     }
   }
 
@@ -187,8 +197,20 @@ export function StockUpdateModal({
     setBusy(true);
 
     try {
+      // The field holds the desired on-hand, but the API sets openingStock — and
+      //   onHand = openingStock + purchased − sold + returnsIn − returnsOut.
+      // Writing the target straight into openingStock double-counts those
+      // movements (e.g. saving an unchanged value silently drops on-hand by the
+      // quantity already sold). Adjust the baseline by the movement so the
+      // resulting on-hand equals what the user typed:
+      //   newOpening = currentOpening + (target − currentOnHand)
+      const target = Number(draft.quantity);
+      const current = stockRows.find((s) => s.itemId === draft.itemId);
+      const movement = current ? current.onHand - current.openingStock : 0;
+      const newOpening = target - movement;
+
       await api.patch(`/companies/${companyId}/items/${draft.itemId}`, {
-        openingStock: Number(draft.quantity),
+        openingStock: newOpening,
       });
       await onSaved();
       clearDraft();
