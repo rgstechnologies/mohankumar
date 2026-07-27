@@ -473,8 +473,6 @@ model Invoice {
   otherCharges          Decimal       @default(0) @db.Decimal(18, 2)
   total                 Decimal       @db.Decimal(18, 2)
   status                InvoiceStatus @default(ISSUED)
-  /// Whether the invoice was generated in online (cash) mode, meaning stock is deducted.
-  isOnline              Boolean       @default(false)
   /// Bank account whose details print on this invoice (else the default bank).
   bankAccountId         String?
   createdById           String
