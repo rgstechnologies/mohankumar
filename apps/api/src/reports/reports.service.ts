@@ -714,43 +714,60 @@ export class ReportsService {
   }
 
   async salesReport(companyId: string) {
-    const [company, parties, invoices, payments, partyPayments] = await Promise.all([
-      this.prisma.company.findUniqueOrThrow({
-        where: { id: companyId },
-        select: { salesPaymentLink: true },
-      }),
-      this.prisma.party.findMany({
-        where: { companyId, type: PartyType.CUSTOMER },
-        select: { id: true, type: true, balanceDocType: true },
-      }),
-      this.prisma.invoice.findMany({
-        where: { companyId, status: { not: InvoiceStatus.CANCELLED } },
-        include: { party: { select: { name: true } } },
-        orderBy: { date: 'asc' },
-      }),
-      this.prisma.payment.findMany({
-        where: { companyId, invoice: { status: { not: InvoiceStatus.CANCELLED } } },
-        include: {
-          invoice: {
-            select: {
-              invoiceNo: true,
-              party: { select: { name: true } },
+    const [company, parties, invoices, payments, creditNotes, partyPayments] =
+      await Promise.all([
+        this.prisma.company.findUniqueOrThrow({
+          where: { id: companyId },
+          select: { salesPaymentLink: true },
+        }),
+        this.prisma.party.findMany({
+          where: { companyId, type: PartyType.CUSTOMER },
+          select: { id: true, type: true, balanceDocType: true },
+        }),
+        this.prisma.invoice.findMany({
+          where: { companyId, status: { not: InvoiceStatus.CANCELLED } },
+          include: { party: { select: { name: true } } },
+          orderBy: { date: 'asc' },
+        }),
+        this.prisma.payment.findMany({
+          where: { companyId, invoice: { status: { not: InvoiceStatus.CANCELLED } } },
+          include: {
+            invoice: {
+              select: {
+                invoiceNo: true,
+                party: { select: { name: true } },
+              },
             },
           },
-        },
-        orderBy: { date: 'asc' },
-      }),
-      this.prisma.partyPayment.findMany({
-        where: { companyId, direction: PartyPaymentDirection.RECEIPT },
-        include: {
-          party: { select: { name: true } },
-        },
-        orderBy: { date: 'asc' },
-      }),
-    ]);
+          orderBy: { date: 'asc' },
+        }),
+        // Sales returns reduce what the customer owes, exactly like a payment.
+        // The party-balance service nets credit notes off the invoice total, so
+        // the Sales Report must credit them too or its "owed" total overstates.
+        this.prisma.note.findMany({
+          where: {
+            companyId,
+            type: 'CREDIT_NOTE',
+            status: { not: InvoiceStatus.CANCELLED },
+          },
+          include: {
+            party: { select: { name: true } },
+            invoice: { select: { invoiceNo: true } },
+          },
+          orderBy: { date: 'asc' },
+        }),
+        this.prisma.partyPayment.findMany({
+          where: { companyId, direction: PartyPaymentDirection.RECEIPT },
+          include: {
+            party: { select: { name: true } },
+          },
+          orderBy: { date: 'asc' },
+        }),
+      ]);
 
+    const partyById = new Map(parties.map((p) => [p.id, p]));
     const resolvedDocTypeOf = (partyId: string) => {
-      const p = parties.find((x) => x.id === partyId);
+      const p = partyById.get(partyId);
       if (!p) return 'invoice';
       return this.balances.resolveDocType(p, company);
     };
@@ -785,6 +802,19 @@ export class ReportsService {
         id: `pay-${p.id}`,
         date: p.date.toISOString().slice(0, 10),
         description: `Payment In (against Bill #${p.invoice.invoiceNo}) - ${p.invoice.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    for (const cn of creditNotes) {
+      const amount = Number(cn.total);
+      totalCredit += amount;
+      const against = cn.invoice ? ` (against Bill #${cn.invoice.invoiceNo})` : '';
+      rows.push({
+        id: `cn-${cn.id}`,
+        date: cn.date.toISOString().slice(0, 10),
+        description: `Credit Note #${cn.noteNo}${against} - ${cn.party.name}`,
         debit: 0,
         credit: amount,
       });
