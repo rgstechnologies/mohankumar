@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { InvoiceStatus, NoteType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { invoiceNo } from '../common/document-number.util';
 
 /**
  * GSTR-1 in the GST portal's offline-tool JSON format — clients upload the
@@ -151,14 +152,12 @@ export class Gstr1JsonService {
       ]);
 
     const pos = (p: string | null) => p ?? company.stateCode ?? '33';
-    const invNo = (fy: string, no: number) =>
-      `INV/${fy}/${String(no).padStart(4, '0')}`;
 
     // ---- B2B (table 4): registered buyers, grouped by their GSTIN ----
     const b2bMap = new Map<string, ReturnType<typeof buildInv>[]>();
     type Inv = (typeof invoices)[number];
     const buildInv = (inv: Inv) => ({
-      inum: invNo(inv.fiscalYear, inv.invoiceNo),
+      inum: invoiceNo(inv.fiscalYear, inv.invoiceNo),
       idt: gstDate(inv.date),
       val: r2(Number(inv.total)),
       pos: pos(inv.placeOfSupply),
@@ -185,7 +184,7 @@ export class Gstr1JsonService {
       const p = pos(inv.placeOfSupply);
       const list = b2clMap.get(p) ?? [];
       list.push({
-        inum: invNo(inv.fiscalYear, inv.invoiceNo),
+        inum: invoiceNo(inv.fiscalYear, inv.invoiceNo),
         idt: gstDate(inv.date),
         val: r2(Number(inv.total)),
         itms: itms(inv.lines as unknown as LineLite[]),

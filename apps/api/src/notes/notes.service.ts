@@ -14,6 +14,7 @@ import {
 import { AccountingService } from '../accounting/accounting.service';
 import type { VoucherLineDto } from '../accounting/dto/accounting.dto';
 import { fiscalYearOf } from '../accounting/fiscal-year.util';
+import { invoiceNo } from '../common/document-number.util';
 import { calculateInvoice, type CalcLineInput } from '../invoices/gst-calculator';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateNoteDto } from './dto/note.dto';
@@ -349,7 +350,7 @@ export class NotesService {
       isInterState: note.isInterState,
       party: note.party,
       against: note.invoice
-        ? `INV/${note.invoice.fiscalYear}/${String(note.invoice.invoiceNo).padStart(4, '0')}`
+        ? invoiceNo(note.invoice.fiscalYear, note.invoice.invoiceNo)
         : note.purchaseBill
           ? `PB/${note.purchaseBill.fiscalYear}/${String(note.purchaseBill.billNo).padStart(4, '0')}`
           : null,

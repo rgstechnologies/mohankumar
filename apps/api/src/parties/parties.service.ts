@@ -15,6 +15,7 @@ import {
 import { stateCodeForName } from '@bookly/shared';
 import { AccountingService } from '../accounting/accounting.service';
 import { PartyBalanceService } from '../balances/party-balance.service';
+import { estimateNo } from '../common/document-number.util';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
   CreateItemDto,
@@ -321,7 +322,7 @@ export class PartiesService {
       if (!est) {
         throw new BadRequestException('Estimate not found for this customer');
       }
-      advanceRef = `EST/${est.fiscalYear}/${String(est.estimateNo).padStart(4, '0')}`;
+      advanceRef = estimateNo(est.fiscalYear, est.estimateNo);
     }
 
     const base = isCustomer
@@ -398,7 +399,7 @@ export class PartiesService {
       estimateId: p.estimateId,
       source: p.source,
       advanceRef: p.estimate
-        ? `EST/${p.estimate.fiscalYear}/${String(p.estimate.estimateNo).padStart(4, '0')}`
+        ? estimateNo(p.estimate.fiscalYear, p.estimate.estimateNo)
         : null,
     }));
   }

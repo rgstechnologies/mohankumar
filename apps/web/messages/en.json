@@ -1599,6 +1599,11 @@
       "sales": "Sales Report"
     },
     "loadingReport": "Loading report…",
+    "range": {
+      "from": "From",
+      "to": "To",
+      "currentFy": "Current FY"
+    },
     "totalDebit": "Total Debit",
     "totalCredit": "Total Credit",
     "totalMoney": "Total Money (Credit - Debit)",

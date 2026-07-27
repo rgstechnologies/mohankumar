@@ -10,9 +10,22 @@ import {
 } from '@prisma/client';
 import { fiscalYearOf } from '../accounting/fiscal-year.util';
 import { PartyBalanceService } from '../balances/party-balance.service';
+import { invoiceNo, estimateNo } from '../common/document-number.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * Inclusive date filter for a Prisma `@db.Date` column. Returns `undefined`
+ * when neither bound is given — Prisma ignores an `undefined` `where` value,
+ * so `date: dateBetween(from, to)` is a no-op filter for the all-time view.
+ * The stored dates carry no time component, so no end-of-day adjustment is
+ * needed for the upper bound.
+ */
+const dateBetween = (from?: string, to?: string) =>
+  from || to
+    ? { ...(from && { gte: new Date(from) }), ...(to && { lte: new Date(to) }) }
+    : undefined;
 
 interface LedgerNet {
   ledgerId: string;
@@ -271,7 +284,7 @@ export class ReportsService {
     const b2b = invoices
       .filter((inv) => inv.party.gstin)
       .map((inv) => ({
-        invoiceNo: `INV/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: invoiceNo(inv.fiscalYear, inv.invoiceNo),
         date: inv.date,
         gstin: inv.party.gstin,
         party: inv.party.name,
@@ -569,7 +582,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((e) => ({
         id: e.id,
-        invoiceNo: `EST/${e.fiscalYear}/${String(e.estimateNo).padStart(4, '0')}`,
+        invoiceNo: estimateNo(e.fiscalYear, e.estimateNo),
         date: e.date,
         party: e.party.name,
         total: Number(e.total),
@@ -584,7 +597,7 @@ export class ReportsService {
       });
       recentDocs = recent.map((inv) => ({
         id: inv.id,
-        invoiceNo: `INV/${inv.fiscalYear}/${String(inv.invoiceNo).padStart(4, '0')}`,
+        invoiceNo: invoiceNo(inv.fiscalYear, inv.invoiceNo),
         date: inv.date,
         party: inv.party.name,
         total: Number(inv.total),
@@ -625,7 +638,8 @@ export class ReportsService {
     };
   }
 
-  async estimateReport(companyId: string) {
+  async estimateReport(companyId: string, from?: string, to?: string) {
+    const date = dateBetween(from, to);
     const [company, parties, estimates, partyPayments] = await Promise.all([
       this.prisma.company.findUniqueOrThrow({
         where: { id: companyId },
@@ -636,12 +650,12 @@ export class ReportsService {
         select: { id: true, type: true, balanceDocType: true },
       }),
       this.prisma.estimate.findMany({
-        where: { companyId, status: { not: EstimateStatus.CANCELLED } },
+        where: { companyId, status: { not: EstimateStatus.CANCELLED }, date },
         include: { party: { select: { name: true } } },
         orderBy: { date: 'asc' },
       }),
       this.prisma.partyPayment.findMany({
-        where: { companyId, direction: PartyPaymentDirection.RECEIPT },
+        where: { companyId, direction: PartyPaymentDirection.RECEIPT, date },
         include: {
           estimate: { select: { estimateNo: true } },
           party: { select: { name: true } },
@@ -731,7 +745,8 @@ export class ReportsService {
     };
   }
 
-  async salesReport(companyId: string) {
+  async salesReport(companyId: string, from?: string, to?: string) {
+    const date = dateBetween(from, to);
     const [company, parties, invoices, payments, creditNotes, partyPayments] =
       await Promise.all([
         this.prisma.company.findUniqueOrThrow({
@@ -743,12 +758,16 @@ export class ReportsService {
           select: { id: true, type: true, balanceDocType: true },
         }),
         this.prisma.invoice.findMany({
-          where: { companyId, status: { not: InvoiceStatus.CANCELLED } },
+          where: { companyId, status: { not: InvoiceStatus.CANCELLED }, date },
           include: { party: { select: { name: true } } },
           orderBy: { date: 'asc' },
         }),
         this.prisma.payment.findMany({
-          where: { companyId, invoice: { status: { not: InvoiceStatus.CANCELLED } } },
+          where: {
+            companyId,
+            invoice: { status: { not: InvoiceStatus.CANCELLED } },
+            date,
+          },
           include: {
             invoice: {
               select: {
@@ -767,6 +786,7 @@ export class ReportsService {
             companyId,
             type: 'CREDIT_NOTE',
             status: { not: InvoiceStatus.CANCELLED },
+            date,
           },
           include: {
             party: { select: { name: true } },
@@ -775,7 +795,7 @@ export class ReportsService {
           orderBy: { date: 'asc' },
         }),
         this.prisma.partyPayment.findMany({
-          where: { companyId, direction: PartyPaymentDirection.RECEIPT },
+          where: { companyId, direction: PartyPaymentDirection.RECEIPT, date },
           include: {
             party: { select: { name: true } },
           },

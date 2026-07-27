@@ -6,6 +6,7 @@ import {
 import { EntryType, EstimateStatus, PartyType, Prisma, VoucherType } from '@prisma/client';
 import { AccountingService } from '../accounting/accounting.service';
 import { fiscalYearOf } from '../accounting/fiscal-year.util';
+import { invoiceNo, estimateNo } from '../common/document-number.util';
 import { InvoicesService } from '../invoices/invoices.service';
 import type { FullInvoice } from '../invoices/invoice-pdf.service';
 import {
@@ -581,7 +582,7 @@ export class EstimatesService {
   }
 
   private displayNo(fiscalYear: string, no: number) {
-    return `EST/${fiscalYear}/${String(no).padStart(4, '0')}`;
+    return estimateNo(fiscalYear, no);
   }
 
   private readonly fullInclude = {
@@ -670,7 +671,7 @@ export class EstimatesService {
       invoice: estimate.invoice
         ? {
             id: estimate.invoice.id,
-            invoiceNo: `INV/${estimate.invoice.fiscalYear}/${String(estimate.invoice.invoiceNo).padStart(4, '0')}`,
+            invoiceNo: invoiceNo(estimate.invoice.fiscalYear, estimate.invoice.invoiceNo),
           }
         : null,
       subtotal: Number(estimate.subtotal),

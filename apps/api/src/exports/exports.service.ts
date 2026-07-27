@@ -69,9 +69,9 @@ export class ExportsService {
       case 'ledger-statement':
         return this.ledgerStatement(companyId, query);
       case 'estimate-report':
-        return this.estimateReportExport(companyId);
+        return this.estimateReportExport(companyId, query);
       case 'sales-report':
-        return this.salesReportExport(companyId);
+        return this.salesReportExport(companyId, query);
       default:
         throw new BadRequestException('Invalid report type');
     }
@@ -439,8 +439,11 @@ export class ExportsService {
     };
   }
 
-  private async estimateReportExport(companyId: string): Promise<TableDoc> {
-    const data = await this.reports.estimateReport(companyId);
+  private async estimateReportExport(
+    companyId: string,
+    q: ExportQuery,
+  ): Promise<TableDoc> {
+    const data = await this.reports.estimateReport(companyId, q.from, q.to);
     return {
       title: 'Estimate Report',
       fileName: `estimate-report-${today()}`,
@@ -459,8 +462,11 @@ export class ExportsService {
     };
   }
 
-  private async salesReportExport(companyId: string): Promise<TableDoc> {
-    const data = await this.reports.salesReport(companyId);
+  private async salesReportExport(
+    companyId: string,
+    q: ExportQuery,
+  ): Promise<TableDoc> {
+    const data = await this.reports.salesReport(companyId, q.from, q.to);
     return {
       title: 'Sales Report',
       fileName: `sales-report-${today()}`,
