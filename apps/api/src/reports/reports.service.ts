@@ -650,11 +650,21 @@ export class ReportsService {
       }),
     ]);
 
+    const partyById = new Map(parties.map((p) => [p.id, p]));
     const resolvedDocTypeOf = (partyId: string) => {
-      const p = parties.find((x) => x.id === partyId);
+      const p = partyById.get(partyId);
       if (!p) return 'invoice';
       return this.balances.resolveDocType(p, company);
     };
+
+    // A CONVERTED estimate is now represented by its invoice and counted in the
+    // Sales Report. Counting it here as well would double-count the same debt
+    // across the two reports, so it (and any advance linked to it) is dropped.
+    const convertedEstimateIds = new Set(
+      estimates
+        .filter((e) => e.status === EstimateStatus.CONVERTED)
+        .map((e) => e.id),
+    );
 
     const rows: {
       id: string;
@@ -668,6 +678,7 @@ export class ReportsService {
     let totalCredit = 0;
 
     for (const est of estimates) {
+      if (est.status === EstimateStatus.CONVERTED) continue;
       const amount = Number(est.total);
       totalDebit += amount;
       rows.push({
@@ -680,8 +691,15 @@ export class ReportsService {
     }
 
     for (const p of partyPayments) {
+      // An advance tied to a converted estimate moves out with that estimate's
+      // debit, so drop it here regardless of its `source`. (Conversion does not
+      // yet relink the advance to the invoice, so it will not appear in the
+      // Sales Report either — a separate gap, unreachable in this build since
+      // tax-free estimates can't be converted.)
+      if (p.estimateId && convertedEstimateIds.has(p.estimateId)) continue;
+
       // A partyPayment belongs to the estimate report when:
-      //   1. It is explicitly linked to an estimate (estimateId set), OR
+      //   1. It is linked to an estimate (estimateId set), OR
       //   2. Its `source` is 'estimate' (unlinked advance from the Estimate Banking screen), OR
       //   3. Legacy record without source: fall back to the party's resolved doc type.
       const isEst =
