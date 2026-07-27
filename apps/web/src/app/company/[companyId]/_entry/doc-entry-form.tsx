@@ -439,7 +439,6 @@ export function DocEntryForm({
       branchId: branchId || undefined,
       date,
       notes: combinedNotes,
-      ...(config.kind === 'invoice' ? { isOnline: cashSale } : {}),
       lines: lines.map((line) => {
         const { rateExcl } = lineCalc(line);
         const payload: Record<string, unknown> = {
