@@ -206,6 +206,7 @@ export class InvoicesService {
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           placeOfSupply,
           isInterState,
+          isOnline: dto.isOnline ?? true,
           notes: dto.notes,
           bankAccountId: dto.bankAccountId ?? null,
           subtotal: calc.subtotal,
@@ -490,6 +491,7 @@ export class InvoicesService {
           dueDate: dto.dueDate ? new Date(dto.dueDate) : null,
           placeOfSupply,
           isInterState,
+          isOnline: dto.isOnline ?? invoice.isOnline,
           notes: dto.notes,
           bankAccountId: dto.bankAccountId ?? null,
           subtotal: calc.subtotal,
@@ -805,7 +807,7 @@ export class InvoicesService {
     const voucherDto = {
       type: VoucherType.RECEIPT,
       date: dto.date,
-      narration: `Payment received against invoice INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`,
+      narration: `Payment received against invoice ${formatDocumentNo(DOCUMENT_PREFIX.INVOICE, invoice.fiscalYear, invoice.invoiceNo)}`,
       lines: [
         { ledgerId: dto.ledgerId, type: EntryType.DEBIT, amount: dto.amount },
         {

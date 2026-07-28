@@ -1,3 +1,4 @@
+import { DOCUMENT_PREFIX, formatDocumentNo } from '@bookly/shared';
 import { Injectable } from '@nestjs/common';
 import type { Company, Invoice, InvoiceLine, Party, Payment, Prisma } from '@prisma/client';
 import PDFDocument from 'pdfkit';
@@ -64,7 +65,7 @@ export class PosReceiptService {
     const M = 10;
     const CW = W - M * 2;
     const c = invoice.company;
-    const displayNo = `INV/${invoice.fiscalYear}/${String(invoice.invoiceNo).padStart(4, '0')}`;
+    const displayNo = formatDocumentNo(DOCUMENT_PREFIX.INVOICE, invoice.fiscalYear, invoice.invoiceNo);
     const isWalkIn = invoice.party.name === 'Walk-in Customer';
 
     // Estimate height so the page hugs the content (thermal rolls are continuous).

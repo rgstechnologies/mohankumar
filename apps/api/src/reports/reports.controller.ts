@@ -86,4 +86,28 @@ export class ReportsController {
   ) {
     return this.reports.gstr3b(companyId, from, to);
   }
+
+  @Get('reports/sales')
+  @ApiOperation({ summary: 'Sales report (invoices, payments, credit notes)' })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  salesReport(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.reports.salesReport(companyId, from, to);
+  }
+
+  @Get('reports/estimates')
+  @ApiOperation({ summary: 'Estimate report (estimates & advance payments)' })
+  @ApiQuery({ name: 'from', required: false })
+  @ApiQuery({ name: 'to', required: false })
+  estimateReport(
+    @Param('companyId', ParseUUIDPipe) companyId: string,
+    @Query('from') from?: string,
+    @Query('to') to?: string,
+  ) {
+    return this.reports.estimateReport(companyId, from, to);
+  }
 }

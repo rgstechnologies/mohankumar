@@ -1,4 +1,4 @@
-import { DOCUMENT_PREFIX } from '@bookly/shared';
+import { DOCUMENT_PREFIX, formatDocumentNo } from '@bookly/shared';
 import {
   BadRequestException,
   Injectable,
@@ -336,7 +336,7 @@ export class NotesService {
       isInterState: note.isInterState,
       party: note.party,
       against: note.invoice
-        ? `INV/${note.invoice.fiscalYear}/${String(note.invoice.invoiceNo).padStart(4, '0')}`
+        ? formatDocumentNo(DOCUMENT_PREFIX.INVOICE, note.invoice.fiscalYear, note.invoice.invoiceNo)
         : null,
       taxableAmount: Number(note.taxableAmount),
       cgstAmount: Number(note.cgstAmount),

@@ -5,6 +5,8 @@ import {
   EntryType,
   EstimateStatus,
   InvoiceStatus,
+  NoteType,
+  PartyPaymentDirection,
   PartyType,
   VoucherStatus,
 } from '@prisma/client';
@@ -505,7 +507,7 @@ export class ReportsService {
         }),
         this.prisma.invoiceLine.groupBy({
           by: ['itemId'],
-          where: { itemId: { not: null }, invoice: { companyId, status: InvoiceStatus.ISSUED } },
+          where: { itemId: { not: null }, invoice: { companyId, status: InvoiceStatus.ISSUED, isOnline: true } },
           _sum: { quantity: true },
         }),
       ]);
@@ -606,6 +608,262 @@ export class ReportsService {
       outstandingInvoiceAmount: outstanding,
       lowStockCount,
       recentInvoices: recentDocs,
+    };
+  }
+
+  async estimateReport(companyId: string, from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    const dateFilter =
+      fromDate || toDate
+        ? {
+            ...(fromDate && { gte: fromDate }),
+            ...(toDate && { lte: toDate }),
+          }
+        : undefined;
+
+    const [company, parties, estimates, partyPayments] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { salesPaymentLink: true },
+      }),
+      this.prisma.party.findMany({
+        where: { companyId, type: PartyType.CUSTOMER },
+        select: { id: true, type: true, balanceDocType: true },
+      }),
+      this.prisma.estimate.findMany({
+        where: {
+          companyId,
+          status: { not: EstimateStatus.CANCELLED },
+          ...(dateFilter && { date: dateFilter }),
+        },
+        include: { party: { select: { name: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.partyPayment.findMany({
+        where: {
+          companyId,
+          direction: PartyPaymentDirection.RECEIPT,
+          ...(dateFilter && { date: dateFilter }),
+        },
+        include: {
+          estimate: { select: { fiscalYear: true, estimateNo: true } },
+          party: { select: { name: true } },
+        },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
+
+    const partyMap = new Map(parties.map((p) => [p.id, p]));
+    const resolvedDocTypeOf = (partyId: string) => {
+      const p = partyMap.get(partyId);
+      if (!p) return 'invoice';
+      if (p.balanceDocType === 'invoice' || p.balanceDocType === 'estimate') {
+        return p.balanceDocType;
+      }
+      return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
+    };
+
+    const rows: {
+      id: string;
+      date: string;
+      description: string;
+      debit: number;
+      credit: number;
+    }[] = [];
+
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    for (const est of estimates) {
+      const amount = Number(est.total);
+      totalDebit += amount;
+      rows.push({
+        id: `est-${est.id}`,
+        date: est.date.toISOString().slice(0, 10),
+        description: `Estimate #${formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, est.fiscalYear, est.estimateNo)} (${est.party.name})`,
+        debit: amount,
+        credit: 0,
+      });
+    }
+
+    for (const p of partyPayments) {
+      const isEst = p.estimateId !== null || resolvedDocTypeOf(p.partyId) === 'estimate';
+      if (!isEst) continue;
+
+      const amount = Number(p.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-${p.id}`,
+        date: p.date.toISOString().slice(0, 10),
+        description: p.estimate
+          ? `Payment In (against Estimate #${formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, p.estimate.fiscalYear, p.estimate.estimateNo)}) - ${p.party.name}`
+          : `Payment In (Advance) - ${p.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      rows,
+      totalDebit: r2(totalDebit),
+      totalCredit: r2(totalCredit),
+      netAmount: r2(totalCredit - totalDebit),
+    };
+  }
+
+  async salesReport(companyId: string, from?: string, to?: string) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    const dateFilter =
+      fromDate || toDate
+        ? {
+            ...(fromDate && { gte: fromDate }),
+            ...(toDate && { lte: toDate }),
+          }
+        : undefined;
+
+    const [company, parties, invoices, payments, partyPayments, creditNotes] = await Promise.all([
+      this.prisma.company.findUniqueOrThrow({
+        where: { id: companyId },
+        select: { salesPaymentLink: true },
+      }),
+      this.prisma.party.findMany({
+        where: { companyId, type: PartyType.CUSTOMER },
+        select: { id: true, type: true, balanceDocType: true },
+      }),
+      this.prisma.invoice.findMany({
+        where: {
+          companyId,
+          status: { not: InvoiceStatus.CANCELLED },
+          ...(dateFilter && { date: dateFilter }),
+        },
+        include: { party: { select: { name: true } } },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.payment.findMany({
+        where: {
+          companyId,
+          invoice: { status: { not: InvoiceStatus.CANCELLED } },
+          ...(dateFilter && { date: dateFilter }),
+        },
+        include: {
+          invoice: {
+            select: {
+              fiscalYear: true,
+              invoiceNo: true,
+              party: { select: { name: true } },
+            },
+          },
+        },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.partyPayment.findMany({
+        where: {
+          companyId,
+          direction: PartyPaymentDirection.RECEIPT,
+          ...(dateFilter && { date: dateFilter }),
+        },
+        include: {
+          party: { select: { name: true } },
+        },
+        orderBy: { date: 'asc' },
+      }),
+      this.prisma.note.findMany({
+        where: {
+          companyId,
+          type: NoteType.CREDIT_NOTE,
+          status: { not: InvoiceStatus.CANCELLED },
+          ...(dateFilter && { date: dateFilter }),
+        },
+        include: {
+          party: { select: { name: true } },
+        },
+        orderBy: { date: 'asc' },
+      }),
+    ]);
+
+    const partyMap = new Map(parties.map((p) => [p.id, p]));
+    const resolvedDocTypeOf = (partyId: string) => {
+      const p = partyMap.get(partyId);
+      if (!p) return 'invoice';
+      if (p.balanceDocType === 'invoice' || p.balanceDocType === 'estimate') {
+        return p.balanceDocType;
+      }
+      return company.salesPaymentLink === 'estimate' ? 'estimate' : 'invoice';
+    };
+
+    const rows: {
+      id: string;
+      date: string;
+      description: string;
+      debit: number;
+      credit: number;
+    }[] = [];
+
+    let totalDebit = 0;
+    let totalCredit = 0;
+
+    for (const inv of invoices) {
+      const amount = Number(inv.total);
+      totalDebit += amount;
+      rows.push({
+        id: `inv-${inv.id}`,
+        date: inv.date.toISOString().slice(0, 10),
+        description: `Sales Bill #${formatDocumentNo(DOCUMENT_PREFIX.INVOICE, inv.fiscalYear, inv.invoiceNo)} (${inv.party.name})`,
+        debit: amount,
+        credit: 0,
+      });
+    }
+
+    for (const p of payments) {
+      const amount = Number(p.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-${p.id}`,
+        date: p.date.toISOString().slice(0, 10),
+        description: `Payment In (against Bill #${formatDocumentNo(DOCUMENT_PREFIX.INVOICE, p.invoice.fiscalYear, p.invoice.invoiceNo)}) - ${p.invoice.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    for (const pp of partyPayments) {
+      const isInv = pp.estimateId === null && resolvedDocTypeOf(pp.partyId) === 'invoice';
+      if (!isInv) continue;
+
+      const amount = Number(pp.amount);
+      totalCredit += amount;
+      rows.push({
+        id: `pay-adv-${pp.id}`,
+        date: pp.date.toISOString().slice(0, 10),
+        description: `Payment In (Advance) - ${pp.party.name}`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    for (const cn of creditNotes) {
+      const amount = Number(cn.total);
+      totalCredit += amount;
+      rows.push({
+        id: `cn-${cn.id}`,
+        date: cn.date.toISOString().slice(0, 10),
+        description: `Credit Note #${formatDocumentNo(DOCUMENT_PREFIX.CREDIT_NOTE, cn.fiscalYear, cn.noteNo)} (${cn.party.name})`,
+        debit: 0,
+        credit: amount,
+      });
+    }
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      rows,
+      totalDebit: r2(totalDebit),
+      totalCredit: r2(totalCredit),
+      netAmount: r2(totalCredit - totalDebit),
     };
   }
 }

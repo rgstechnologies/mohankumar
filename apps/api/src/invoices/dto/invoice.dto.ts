@@ -98,6 +98,11 @@ export class CreateInvoiceDto {
   @Matches(STATE_CODE_REGEX, { message: 'State code must be 2 digits' })
   placeOfSupply?: string;
 
+  @ApiPropertyOptional({ description: 'Whether the invoice is an online sale (deducts stock)' })
+  @IsOptional()
+  @IsBoolean()
+  isOnline?: boolean;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()

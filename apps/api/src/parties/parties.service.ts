@@ -12,7 +12,7 @@ import {
   VoucherStatus,
   VoucherType,
 } from '@prisma/client';
-import { stateCodeForName } from '@bookly/shared';
+import { DOCUMENT_PREFIX, formatDocumentNo, stateCodeForName } from '@bookly/shared';
 import { AccountingService } from '../accounting/accounting.service';
 import { PartyBalanceService } from '../balances/party-balance.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -318,7 +318,7 @@ export class PartiesService {
       if (!est) {
         throw new BadRequestException('Estimate not found for this customer');
       }
-      advanceRef = `EST/${est.fiscalYear}/${String(est.estimateNo).padStart(4, '0')}`;
+      advanceRef = formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, est.fiscalYear, est.estimateNo);
     }
 
     const base = isCustomer
@@ -393,7 +393,7 @@ export class PartiesService {
       note: p.note,
       estimateId: p.estimateId,
       advanceRef: p.estimate
-        ? `EST/${p.estimate.fiscalYear}/${String(p.estimate.estimateNo).padStart(4, '0')}`
+        ? formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, p.estimate.fiscalYear, p.estimate.estimateNo)
         : null,
     }));
   }

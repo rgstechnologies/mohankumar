@@ -46,7 +46,7 @@ export class BatchesService {
         by: ['batchId'],
         where: {
           batchId: { in: ids },
-          invoice: { status: InvoiceStatus.ISSUED },
+          invoice: { status: InvoiceStatus.ISSUED, isOnline: true },
         },
         _sum: { quantity: true },
       }),
@@ -54,7 +54,11 @@ export class BatchesService {
         by: ['batchId'],
         where: {
           batchId: { in: ids },
-          note: { status: InvoiceStatus.ISSUED, type: NoteType.CREDIT_NOTE },
+          note: {
+            status: InvoiceStatus.ISSUED,
+            type: NoteType.CREDIT_NOTE,
+            OR: [{ invoiceId: null }, { invoice: { isOnline: true } }],
+          },
         },
         _sum: { quantity: true },
       }),
@@ -198,7 +202,7 @@ export class BatchesService {
         by: ['itemId'],
         where: {
           itemId: { not: null },
-          invoice: { companyId, status: InvoiceStatus.ISSUED },
+          invoice: { companyId, status: InvoiceStatus.ISSUED, isOnline: true },
         },
         _sum: { quantity: true },
       }),
@@ -206,7 +210,12 @@ export class BatchesService {
         by: ['itemId'],
         where: {
           itemId: { not: null },
-          note: { companyId, status: InvoiceStatus.ISSUED, type: NoteType.CREDIT_NOTE },
+          note: {
+            companyId,
+            status: InvoiceStatus.ISSUED,
+            type: NoteType.CREDIT_NOTE,
+            OR: [{ invoiceId: null }, { invoice: { isOnline: true } }],
+          },
         },
         _sum: { quantity: true },
       }).then(async (creditIn) => ({
