@@ -312,9 +312,10 @@ export function DocEntryForm({
 
   const taxedLines = config.noTax ? false : config.taxToggle && !applyTax ? false : true;
 
-  const itemOptions = useMemo(() => [
-    { value: '', label: t('freeText') },
-    ...items.map((it) => {
+  const isFreeTextRemoved = config.kind === 'estimate' || config.kind === 'invoice';
+
+  const itemOptions = useMemo(() => {
+    const options = items.map((it) => {
       const metaParts = [
         it.sku ? t('itemOptionCode', { code: it.sku }) : '',
         it.hsnCode ? t('itemOptionHsn', { hsn: it.hsnCode }) : '',
@@ -326,8 +327,16 @@ export function DocEntryForm({
         hint: metaParts.join(' • ') || undefined,
         keywords: [it.name, it.sku ?? '', it.hsnCode ?? ''].join(' '),
       };
-    }),
-  ], [items, t]);
+    });
+
+    if (isFreeTextRemoved) {
+      return options;
+    }
+    return [
+      { value: '', label: t('freeText') },
+      ...options,
+    ];
+  }, [items, t, isFreeTextRemoved]);
 
   function updateLine(index: number, patch: Partial<DraftLine>) {
     setLines((prev) =>
@@ -390,6 +399,7 @@ export function DocEntryForm({
       branchId: branchId || undefined,
       date,
       notes: combinedNotes,
+      ...(config.kind === 'invoice' ? { isOnline: cashSale } : {}),
       lines: lines.map((line) => {
         const { rateExcl } = lineCalc(line);
         const payload: Record<string, unknown> = {
@@ -399,15 +409,11 @@ export function DocEntryForm({
           rate: line.rate ? Math.round(rateExcl * 100) / 100 : undefined,
           batchNo: line.batchNo || undefined,
           expiryDate: line.expiryDate || undefined,
+          discountPct: Number(line.discountPct) || 0,
+          // When "Apply tax" is off (or it is a tax-less document), force 0 on EVERY line
+          // (incl. item lines — otherwise the server falls back to the item's own GST rate).
+          gstRate: taxedLines ? (line.itemId ? undefined : Number(line.gstRate)) : 0,
         };
-        // Tax-less documents (e.g. purchase orders) take only qty/rate lines —
-        // their DTO rejects gstRate/discountPct, so never send them.
-        if (!config.noTax) {
-          payload.discountPct = Number(line.discountPct) || 0;
-          // When "Apply tax" is off, force 0 on EVERY line (incl. item lines —
-          // otherwise the server falls back to the item's own GST rate).
-          payload.gstRate = taxedLines ? (line.itemId ? undefined : Number(line.gstRate)) : 0;
-        }
         return payload;
       }),
     };
@@ -476,7 +482,12 @@ export function DocEntryForm({
   }
 
   const canSave =
-    !!partyId && lines.some((l) => Number(l.quantity) > 0 && (l.itemId || l.description));
+    !!partyId &&
+    lines.some(
+      (l) =>
+        Number(l.quantity) > 0 &&
+        (l.itemId || (isFreeTextRemoved ? l.description !== '' : !!l.description)),
+    );
 
   return (
     <div className="min-h-screen bg-subtle">
@@ -496,18 +507,18 @@ export function DocEntryForm({
             </h1>
             {config.creditCash && !editId && (
               <div className="ml-2 inline-flex rounded-md border border-line p-0.5 text-xs font-medium">
-                {(['credit', 'cash'] as const).map((m) => (
+                {(['offline', 'online'] as const).map((m) => (
                   <button
                     key={m}
                     type="button"
-                    onClick={() => setCashSale(m === 'cash')}
+                    onClick={() => setCashSale(m === 'online')}
                     className={`rounded px-2.5 py-1 ${
-                      (m === 'cash') === cashSale
+                      (m === 'online') === cashSale
                         ? 'bg-brand-600 text-white'
                         : 'text-muted hover:bg-subtle'
                     }`}
                   >
-                    {t(m === 'cash' ? 'cash' : 'credit')}
+                    {m === 'online' ? 'Online' : 'Offline'}
                   </button>
                 ))}
               </div>
@@ -688,7 +699,7 @@ export function DocEntryForm({
                         <Combobox
                           value={line.itemId}
                           onChange={(v) => updateLine(i, { itemId: v })}
-                          placeholder={t('freeText')}
+                          placeholder={isFreeTextRemoved ? t('selectItem') : t('freeText')}
                           searchPlaceholder={t('itemSearchPlaceholder')}
                           emptyText={t('noItemsFound')}
                           className="w-full"
@@ -702,7 +713,7 @@ export function DocEntryForm({
                         >
                           {t('addItem')}
                         </button>
-                        {!line.itemId && (
+                        {(!isFreeTextRemoved || line.description !== '') && !line.itemId && (
                           <Input
                             required
                             value={line.description}

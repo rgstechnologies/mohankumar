@@ -411,6 +411,10 @@ model PartyPayment {
   note            String?
   /// Optional sales estimate this payment is an advance against.
   estimateId      String?
+  /// Which banking screen created this receipt: 'estimate' | 'invoice' | null.
+  /// Null = vendor payments or legacy records. Used by reports to route
+  /// unlinked advances (no estimateId) to the correct report section.
+  source          String?
   createdAt       DateTime              @default(now())
 
   company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -470,7 +474,7 @@ model Invoice {
   total                 Decimal       @db.Decimal(18, 2)
   status                InvoiceStatus @default(ISSUED)
   /// Whether the invoice was generated in online (cash) mode, meaning stock is deducted.
-  isOnline              Boolean       @default(true)
+  isOnline              Boolean       @default(false)
   /// Bank account whose details print on this invoice (else the default bank).
   bankAccountId         String?
   createdById           String

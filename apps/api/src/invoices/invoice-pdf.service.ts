@@ -650,7 +650,8 @@ export class InvoicePdfService {
     doc.fontSize(11).font(F.bold).fillColor('#1e293b').text(displayNo, M, doc.y);
     doc.fontSize(9).font(F.regular).fillColor('#475569');
     doc.text(`${L.date}: ${invoice.date.toLocaleDateString('en-IN')}`, M, doc.y + 2);
-    if (invoice.dueDate) doc.text(`${dueLabel}: ${invoice.dueDate.toLocaleDateString('en-IN')}`, M, doc.y);
+    // Commented out to remove "valid until" and "due date" fields from printed documents.
+    // if (invoice.dueDate) doc.text(`${dueLabel}: ${invoice.dueDate.toLocaleDateString('en-IN')}`, M, doc.y);
     doc.text(`${L.placeOfSupply}: ${invoice.placeOfSupply ?? '—'} ${invoice.isInterState ? L.inter : L.intra}`, M, doc.y);
 
     // Right: bill-to / vendor — a small accent heading over a bold party name.

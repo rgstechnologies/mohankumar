@@ -124,8 +124,9 @@
       "proforma-invoices": "Proforma Invoices",
       "print-settings": "Print Settings",
       "payment-in": "Payment In",
-      "estimate-payments": "Estimate Payment-In",
-      "invoice-payments": "Invoice Payment-In"
+      "payment-out": "Payment Out",
+      "estimate-payments": "Payment In",
+      "invoice-payments": "Payment In"
     },
     "roles": {
       "OWNER": "Owner",
@@ -1585,9 +1586,14 @@
       "profit-loss": "Profit & Loss",
       "balance-sheet": "Balance Sheet",
       "gstr1": "GSTR-1",
-      "gstr3b": "GSTR-3B"
+      "gstr3b": "GSTR-3B",
+      "estimates": "Estimate Report",
+      "sales": "Sales Report"
     },
     "loadingReport": "Loading report…",
+    "totalDebit": "Total Debit",
+    "totalCredit": "Total Credit",
+    "totalMoney": "Total Money (Credit - Debit)",
     "trialBalanceAsOf": "Trial Balance as of {date}",
     "ledger": "Ledger",
     "group": "Group",
@@ -2571,6 +2577,7 @@
     "applyTaxHint": "Turn off for a tax-free estimate",
     "items": "Items",
     "freeText": "Free-text line",
+    "selectItem": "Select item…",
     "itemSearchPlaceholder": "Search by item name, code, or HSN…",
     "noItemsFound": "No items found",
     "itemOptionCode": "Code: {code}",

@@ -94,6 +94,7 @@ const NAV_GROUPS: { group: string; items: { key: Tab; label: string }[] }[] = [
       { key: 'invoice-payments', label: 'invoicePayments' },
     ],
   },
+
   {
     group: 'inventory',
     items: [
@@ -263,7 +264,6 @@ export default function CompanyPage() {
 
   const canPostVouchers = ['OWNER', 'ADMIN', 'ACCOUNTANT', 'CASHIER'].includes(role);
   const canManageLedgers = ['OWNER', 'ADMIN', 'ACCOUNTANT'].includes(role);
-  const isAdminRole = ['OWNER', 'ADMIN'].includes(role);
   const currentGroup = NAV_GROUPS.find((g) => g.items.some((i) => i.key === tab));
 
   if (!companyName) {
@@ -406,14 +406,16 @@ export default function CompanyPage() {
         </header>
 
         {/* Page title band */}
-        <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-4 lg:px-6">
-          <h1 className="truncate text-xl font-bold text-ink">{t(`titles.${tab}`)}</h1>
-          {role === 'AUDITOR' ? (
-            <span className="shrink-0 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
-              {t('readOnlyAuditor')}
-            </span>
-          ) : null}
-        </div>
+        {tab !== 'estimate-payments' && tab !== 'invoice-payments' && tab !== 'payment-out' && (
+          <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-4 lg:px-6">
+            <h1 className="truncate text-xl font-bold text-ink">{t(`titles.${tab}`)}</h1>
+            {role === 'AUDITOR' ? (
+              <span className="shrink-0 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
+                {t('readOnlyAuditor')}
+              </span>
+            ) : null}
+          </div>
+        )}
 
         <main className="space-y-6 p-4 lg:p-6">
           {tab === 'overview' && <OverviewTab companyId={companyId} />}
@@ -434,7 +436,6 @@ export default function CompanyPage() {
               invoices={invoices}
               canBill={canPostVouchers}
               canCancel={canManageLedgers}
-              canCustomize={isAdminRole}
               onChanged={reload}
             />
           )}

@@ -318,7 +318,11 @@ export class PartiesService {
       if (!est) {
         throw new BadRequestException('Estimate not found for this customer');
       }
+<<<<<<< HEAD
       advanceRef = formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, est.fiscalYear, est.estimateNo);
+=======
+      advanceRef = `AGE/${est.fiscalYear}/${String(est.estimateNo).padStart(4, '0')}`;
+>>>>>>> 15e6078e70b61b3e37ea44feb1ba6b9f3ba0deb0
     }
 
     const base = isCustomer
@@ -367,6 +371,7 @@ export class PartiesService {
           reference: dto.reference,
           note: dto.note,
           estimateId: dto.estimateId,
+          source: dto.source ?? null,
         },
       });
     });
@@ -392,6 +397,7 @@ export class PartiesService {
       reference: p.reference,
       note: p.note,
       estimateId: p.estimateId,
+      source: p.source,
       advanceRef: p.estimate
         ? formatDocumentNo(DOCUMENT_PREFIX.ESTIMATE, p.estimate.fiscalYear, p.estimate.estimateNo)
         : null,

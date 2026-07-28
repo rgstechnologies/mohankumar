@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { EmptyState, Pagination, SearchInput, useTable } from '@/components/table';
+import { EmptyState, ExportButtons, Pagination, SearchInput, useTable } from '@/components/table';
 import { useFeedback } from '@/components/feedback';
 import { Button, Card } from '@/components/ui';
 import { RowActions } from '@/components/row-actions';
@@ -106,6 +106,7 @@ export function EstimatesTab({
           onChange={table.setQuery}
           placeholder={t('searchPlaceholder')}
         />
+        <ExportButtons companyId={companyId} report="estimates" />
         {canBill && (
           <Button
             variant="primary"
@@ -137,7 +138,6 @@ export function EstimatesTab({
                   <th className="py-2">{t('table.estimate')}</th>
                   <th className="py-2">{tc('date')}</th>
                   <th className="py-2">{t('table.customer')}</th>
-                  <th className="py-2">{t('table.validUntil')}</th>
                   <th className="py-2 text-right">{tc('total')}</th>
                   <th className="py-2 text-center">{tc('status')}</th>
                   <th className="py-2 text-right">{tc('actions')}</th>
@@ -151,16 +151,6 @@ export function EstimatesTab({
                       {new Date(est.date).toLocaleDateString('en-IN')}
                     </td>
                     <td className="py-2">{est.party.name}</td>
-                    <td className="py-2 whitespace-nowrap text-xs">
-                      {est.validUntil
-                        ? new Date(est.validUntil).toLocaleDateString('en-IN')
-                        : '—'}
-                      {est.isExpired && (
-                        <span className="ml-1 rounded bg-amber-50 px-1 py-0.5 text-[10px] text-amber-700">
-                          {t('expired')}
-                        </span>
-                      )}
-                    </td>
                     <td className="py-2 text-right tabular-nums">₹{inr(est.total)}</td>
                     <td className="py-2 text-center">
                       <span
