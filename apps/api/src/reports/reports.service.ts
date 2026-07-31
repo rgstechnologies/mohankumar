@@ -638,7 +638,7 @@ export class ReportsService {
     };
   }
 
-  async estimateReport(companyId: string, from?: string, to?: string) {
+  async estimateReport(companyId: string, from?: string, to?: string, partyId?: string) {
     const date = dateBetween(from, to);
     const [company, parties, estimates, partyPayments] = await Promise.all([
       this.prisma.company.findUniqueOrThrow({
@@ -650,12 +650,22 @@ export class ReportsService {
         select: { id: true, type: true, balanceDocType: true },
       }),
       this.prisma.estimate.findMany({
-        where: { companyId, status: { not: EstimateStatus.CANCELLED }, date },
+        where: {
+          companyId,
+          status: { not: EstimateStatus.CANCELLED },
+          date,
+          ...(partyId && { partyId }),
+        },
         include: { party: { select: { name: true } } },
         orderBy: { date: 'asc' },
       }),
       this.prisma.partyPayment.findMany({
-        where: { companyId, direction: PartyPaymentDirection.RECEIPT, date },
+        where: {
+          companyId,
+          direction: PartyPaymentDirection.RECEIPT,
+          date,
+          ...(partyId && { partyId }),
+        },
         include: {
           estimate: { select: { estimateNo: true } },
           party: { select: { name: true } },
@@ -665,8 +675,8 @@ export class ReportsService {
     ]);
 
     const partyById = new Map(parties.map((p) => [p.id, p]));
-    const resolvedDocTypeOf = (partyId: string) => {
-      const p = partyById.get(partyId);
+    const resolvedDocTypeOf = (pid: string) => {
+      const p = partyById.get(pid);
       if (!p) return 'invoice';
       return this.balances.resolveDocType(p, company);
     };
@@ -745,7 +755,7 @@ export class ReportsService {
     };
   }
 
-  async salesReport(companyId: string, from?: string, to?: string) {
+  async salesReport(companyId: string, from?: string, to?: string, partyId?: string) {
     const date = dateBetween(from, to);
     const [company, parties, invoices, payments, creditNotes, partyPayments] =
       await Promise.all([
@@ -758,14 +768,22 @@ export class ReportsService {
           select: { id: true, type: true, balanceDocType: true },
         }),
         this.prisma.invoice.findMany({
-          where: { companyId, status: { not: InvoiceStatus.CANCELLED }, date },
+          where: {
+            companyId,
+            status: { not: InvoiceStatus.CANCELLED },
+            date,
+            ...(partyId && { partyId }),
+          },
           include: { party: { select: { name: true } } },
           orderBy: { date: 'asc' },
         }),
         this.prisma.payment.findMany({
           where: {
             companyId,
-            invoice: { status: { not: InvoiceStatus.CANCELLED } },
+            invoice: {
+              status: { not: InvoiceStatus.CANCELLED },
+              ...(partyId && { partyId }),
+            },
             date,
           },
           include: {
@@ -787,6 +805,7 @@ export class ReportsService {
             type: 'CREDIT_NOTE',
             status: { not: InvoiceStatus.CANCELLED },
             date,
+            ...(partyId && { partyId }),
           },
           include: {
             party: { select: { name: true } },
@@ -795,7 +814,12 @@ export class ReportsService {
           orderBy: { date: 'asc' },
         }),
         this.prisma.partyPayment.findMany({
-          where: { companyId, direction: PartyPaymentDirection.RECEIPT, date },
+          where: {
+            companyId,
+            direction: PartyPaymentDirection.RECEIPT,
+            date,
+            ...(partyId && { partyId }),
+          },
           include: {
             party: { select: { name: true } },
           },
@@ -804,8 +828,8 @@ export class ReportsService {
       ]);
 
     const partyById = new Map(parties.map((p) => [p.id, p]));
-    const resolvedDocTypeOf = (partyId: string) => {
-      const p = partyById.get(partyId);
+    const resolvedDocTypeOf = (pid: string) => {
+      const p = partyById.get(pid);
       if (!p) return 'invoice';
       return this.balances.resolveDocType(p, company);
     };

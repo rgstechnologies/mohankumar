@@ -225,28 +225,8 @@ export function PartiesTab({
         setError(t('nameRequired'));
         return;
       }
-      if (!draft.gstin.trim()) {
-        setError(t('gstinRequired'));
-        return;
-      }
       if (!draft.phone.trim()) {
         setError(t('phoneRequired'));
-        return;
-      }
-      if (!draft.state) {
-        setError(t('stateRequired'));
-        return;
-      }
-      if (!draft.addressLine1.trim()) {
-        setError(t('addressLine1Required'));
-        return;
-      }
-      if (!draft.city.trim()) {
-        setError(t('cityRequired'));
-        return;
-      }
-      if (!draft.pincode.trim()) {
-        setError(t('pincodeRequired'));
         return;
       }
     }
@@ -431,14 +411,12 @@ export function PartiesTab({
             </div>
             <div>
               <Label>
-                {draft.type === 'CUSTOMER' ? t('gstin') : t('gstinOptional')}{' '}
-                {draft.type === 'CUSTOMER' && <span className="text-red-500">*</span>}{' '}
+                {t('gstinOptional')}{' '}
                 <HelpTip text={t('gstinHelp')} />
               </Label>
               <div className="flex gap-2">
                 <Input
                   className="flex-1"
-                  required={draft.type === 'CUSTOMER'}
                   value={draft.gstin}
                   maxLength={15}
                   onChange={(e) => setDraft({ ...draft, gstin: e.target.value.toUpperCase() })}
@@ -495,12 +473,8 @@ export function PartiesTab({
               />
             </div>
             <div className="sm:col-span-2">
-              <Label>
-                {t('addressLine1')}
-                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
-              </Label>
+              <Label>{t('addressLine1')}</Label>
               <Input
-                required={draft.type === 'CUSTOMER'}
                 value={draft.addressLine1}
                 onChange={(e) => setDraft({ ...draft, addressLine1: e.target.value })}
               />
@@ -513,23 +487,15 @@ export function PartiesTab({
               />
             </div>
             <div>
-              <Label>
-                {draft.type === 'CUSTOMER' ? t('city') : t('cityOptional')}
-                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
-              </Label>
+              <Label>{t('cityOptional')}</Label>
               <Input
-                required={draft.type === 'CUSTOMER'}
                 value={draft.city}
                 onChange={(e) => setDraft({ ...draft, city: e.target.value })}
               />
             </div>
             <div>
-              <Label>
-                {draft.type === 'CUSTOMER' ? t('pincode') : t('pincodeOptional')}
-                {draft.type === 'CUSTOMER' && <span className="text-red-500"> *</span>}
-              </Label>
+              <Label>{t('pincodeOptional')}</Label>
               <Input
-                required={draft.type === 'CUSTOMER'}
                 value={draft.pincode}
                 maxLength={6}
                 onChange={(e) =>

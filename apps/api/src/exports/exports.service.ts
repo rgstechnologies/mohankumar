@@ -28,6 +28,7 @@ interface ExportQuery {
   to?: string;
   asOf?: string;
   ledgerId?: string;
+  partyId?: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -443,7 +444,7 @@ export class ExportsService {
     companyId: string,
     q: ExportQuery,
   ): Promise<TableDoc> {
-    const data = await this.reports.estimateReport(companyId, q.from, q.to);
+    const data = await this.reports.estimateReport(companyId, q.from, q.to, q.partyId);
     return {
       title: 'Estimate Report',
       fileName: `estimate-report-${today()}`,
@@ -466,7 +467,7 @@ export class ExportsService {
     companyId: string,
     q: ExportQuery,
   ): Promise<TableDoc> {
-    const data = await this.reports.salesReport(companyId, q.from, q.to);
+    const data = await this.reports.salesReport(companyId, q.from, q.to, q.partyId);
     return {
       title: 'Sales Report',
       fileName: `sales-report-${today()}`,

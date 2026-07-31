@@ -83,23 +83,27 @@ export class ReportsController {
   @ApiOperation({ summary: 'Estimate Report (credit & debit records)' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'partyId', required: false })
   estimateReport(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('partyId') partyId?: string,
   ) {
-    return this.reports.estimateReport(companyId, from, to);
+    return this.reports.estimateReport(companyId, from, to, partyId);
   }
 
   @Get('reports/sales')
   @ApiOperation({ summary: 'Sales Report (credit & debit records)' })
   @ApiQuery({ name: 'from', required: false })
   @ApiQuery({ name: 'to', required: false })
+  @ApiQuery({ name: 'partyId', required: false })
   salesReport(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
+    @Query('partyId') partyId?: string,
   ) {
-    return this.reports.salesReport(companyId, from, to);
+    return this.reports.salesReport(companyId, from, to, partyId);
   }
 }

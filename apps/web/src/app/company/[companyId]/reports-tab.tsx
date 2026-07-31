@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { ExportButtons } from '@/components/table';
 import { useFeedback } from '@/components/feedback';
-import { Button, Card, HelpTip, Badge, Input, Label } from '@/components/ui';
-import { inr } from '@/lib/accounting';
+import { Button, Card, HelpTip, Badge, Input, Label, Combobox } from '@/components/ui';
+import { fetchParties, inr, type PartyRow } from '@/lib/accounting';
 import { api, ApiError, downloadFile } from '@/lib/api';
 
 type Report = 'gstr1' | 'estimates' | 'sales';
@@ -26,6 +26,23 @@ export function ReportsTab({ companyId }: { companyId: string }) {
   // current financial year). GSTR-1 has its own month selector and ignores it.
   const [range, setRange] = useState(currentFinancialYear);
   const dateScoped = report === 'estimates' || report === 'sales';
+
+  // Customer (party) filter — only shown for date-scoped reports.
+  const [parties, setParties] = useState<PartyRow[]>([]);
+  const [partyId, setPartyId] = useState('');
+
+  // Load parties once for the customer filter dropdown.
+  useEffect(() => {
+    fetchParties(companyId)
+      .then((list) => setParties(list.filter((p) => p.type === 'CUSTOMER')))
+      .catch(() => { /* ignore — filter just won't populate */ });
+  }, [companyId]);
+
+  // Reset party filter when switching report type.
+  useEffect(() => {
+    if (!dateScoped) setPartyId('');
+  }, [report, dateScoped]);
+
   // Data is tagged with the report it belongs to — switching reports renders
   // the loading state until the matching response arrives, and a slow stale
   // response can never be shown under the wrong report.
@@ -36,18 +53,29 @@ export function ReportsTab({ companyId }: { companyId: string }) {
 
   const load = useCallback(async () => {
     const scoped = report === 'estimates' || report === 'sales';
-    const qs = scoped ? `?from=${range.from}&to=${range.to}` : '';
+    const params = new URLSearchParams();
+    if (scoped) {
+      params.set('from', range.from);
+      params.set('to', range.to);
+    }
+    if (scoped && partyId) params.set('partyId', partyId);
+    const qs = params.toString() ? `?${params.toString()}` : '';
     const payload = await api.get<Record<string, unknown>>(
       `/companies/${companyId}/reports/${report}${qs}`,
     );
     setData({ report, payload });
-  }, [companyId, report, range.from, range.to]);
+  }, [companyId, report, range.from, range.to, partyId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   const current = data && data.report === report ? data.payload : null;
+
+  // Build export params including customer filter.
+  const exportParams: Record<string, string | undefined> = dateScoped
+    ? { from: range.from, to: range.to, ...(partyId ? { partyId } : {}) }
+    : {};
 
   return (
     <div className="space-y-4">
@@ -70,7 +98,7 @@ export function ReportsTab({ companyId }: { companyId: string }) {
           <ExportButtons
             companyId={companyId}
             report={report === 'estimates' ? 'estimate-report' : report === 'sales' ? 'sales-report' : report}
-            params={dateScoped ? { from: range.from, to: range.to } : {}}
+            params={exportParams}
           />
         </div>
       </div>
@@ -98,6 +126,30 @@ export function ReportsTab({ companyId }: { companyId: string }) {
           <Button variant="secondary" onClick={() => setRange(currentFinancialYear())}>
             {t('range.currentFy')}
           </Button>
+
+          {/* Customer filter */}
+          <div className="min-w-[240px]">
+            <Label>Customer</Label>
+            <Combobox
+              value={partyId}
+              onChange={setPartyId}
+              placeholder="All customers"
+              options={[
+                { value: '', label: 'All customers' },
+                ...parties.map((p) => ({
+                  value: p.id,
+                  label: p.name,
+                  hint: p.gstin || undefined,
+                })),
+              ]}
+            />
+          </div>
+
+          {partyId && (
+            <Button variant="secondary" onClick={() => setPartyId('')}>
+              Clear filter
+            </Button>
+          )}
         </div>
       )}
 
@@ -299,7 +351,7 @@ function CreditDebitReport({
               ₹{inr(data.totalDebit)}
             </div>
           </div>
-          <p className="mt-2 text-[11px] text-faint">Cumulative charges & bills billed</p>
+          <p className="mt-2 text-[11px] text-faint">Cumulative charges &amp; bills billed</p>
         </Card>
 
         {/* Credit metric */}

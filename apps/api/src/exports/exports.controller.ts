@@ -72,6 +72,7 @@ export class ExportsController {
   @ApiQuery({ name: 'to', required: false })
   @ApiQuery({ name: 'asOf', required: false })
   @ApiQuery({ name: 'ledgerId', required: false })
+  @ApiQuery({ name: 'partyId', required: false })
   async export(
     @Param('companyId', ParseUUIDPipe) companyId: string,
     @Param('report') report: string,
@@ -81,6 +82,7 @@ export class ExportsController {
     @Query('to') to?: string,
     @Query('asOf') asOf?: string,
     @Query('ledgerId') ledgerId?: string,
+    @Query('partyId') partyId?: string,
   ): Promise<void> {
     if (!EXPORTABLE_REPORTS.includes(report as ExportableReport)) {
       throw new BadRequestException(
@@ -96,6 +98,7 @@ export class ExportsController {
       to,
       asOf,
       ledgerId,
+      partyId,
     });
 
     const buffer =

@@ -419,17 +419,6 @@ export default function CompanyPage() {
           />
         </header>
 
-        {/* Page title band */}
-        {tab !== 'estimate-payments' && tab !== 'invoice-payments' && tab !== 'payment-out' && (
-          <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-4 lg:px-6">
-            <h1 className="truncate text-xl font-bold text-ink">{t(`titles.${tab}`)}</h1>
-            {role === 'AUDITOR' ? (
-              <span className="shrink-0 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-200">
-                {t('readOnlyAuditor')}
-              </span>
-            ) : null}
-          </div>
-        )}
 
         <main className="space-y-6 p-4 lg:p-6">
           {tab === 'overview' && <OverviewTab companyId={companyId} />}
